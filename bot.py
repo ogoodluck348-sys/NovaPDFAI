@@ -24,6 +24,7 @@ from PyPDF2 import PdfReader, PdfWriter, PdfMerger
 from PIL import Image, ImageDraw, ImageFont
 from images_to_pdf_functions import *
 from unlock_pdf_functions import *
+from qr_code_functions import *
 from reportlab.pdfgen import canvas
 from reportlab.lib.colors import Color
 
@@ -146,6 +147,9 @@ def main_keyboard():
         ],
         [
             InlineKeyboardButton("📝 Text to PDF", callback_data="texttopdf")
+        ],
+        [
+            InlineKeyboardButton("📱 QR Code Generator", callback_data="qr_code")
         ],
         [
             InlineKeyboardButton("➕ More", callback_data="more")
@@ -3326,6 +3330,44 @@ def main():
     )
 
     app.add_handler(unlock_handler)
+
+    # QR Code Generator
+    qr_code_handler = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(
+                qr_start,
+                pattern="^qr_code$"
+            )
+        ],
+        states={
+            QR_WAIT_TEXT: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    qr_receive_text
+                ),
+                CallbackQueryHandler(
+                    qr_cancel,
+                    pattern="^qr_cancel$"
+                )
+            ]
+        },
+        fallbacks=[
+            CallbackQueryHandler(
+                qr_cancel,
+                pattern="^qr_cancel$"
+            ),
+            CallbackQueryHandler(
+                inline_back_handler,
+                pattern="^back$"
+            ),
+            CommandHandler(
+                "cancel",
+                cancel
+            )
+        ]
+    )
+
+    app.add_handler(qr_code_handler)
 
     # Merge PDF
     merge_handler = ConversationHandler(
