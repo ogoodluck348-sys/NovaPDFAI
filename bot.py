@@ -1646,7 +1646,13 @@ def main():
         )
     ]
 },
-        fallbacks=[]
+        fallbacks=[
+            CallbackQueryHandler(
+                inline_back_handler,
+                pattern="^back$"
+            ),
+            CommandHandler("cancel", cancel)
+        ]
     )
 
     # Register Text to PDF handler
