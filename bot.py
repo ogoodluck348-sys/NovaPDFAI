@@ -69,6 +69,10 @@ WATERMARK_WAIT_FILE = 9
 WATERMARK_WAIT_TEXT = 10
 WATERMARK_WAIT_NAME = 11
 WATERMARK_WAIT_COLOR = 12
+ROTATE_WAIT_FILE = 13
+ROTATE_WAIT_ANGLE = 14
+ROTATE_WAIT_NAME = 15
+
 
 
 # =========================
@@ -2035,6 +2039,312 @@ async def watermark_cancel(
     return ConversationHandler.END
 
 
+
+# =========================
+# ROTATE PDF
+# =========================
+
+def rotate_cancel_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Cancel", callback_data="rotate_cancel")]
+    ])
+
+
+def rotate_angle_keyboard():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("↻ 90°", callback_data="rotate_90"),
+            InlineKeyboardButton("↻ 180°", callback_data="rotate_180")
+        ],
+        [
+            InlineKeyboardButton("↺ 270°", callback_data="rotate_270")
+        ],
+        [
+            InlineKeyboardButton("❌ Cancel", callback_data="rotate_cancel")
+        ]
+    ])
+
+
+async def rotate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+
+    if query:
+        await query.answer()
+        message = query.message
+    else:
+        message = update.effective_message
+
+    context.user_data.clear()
+
+    await message.edit_text(
+        "🔄 Rotate PDF\n\n"
+        "Send the PDF you want to rotate.",
+        reply_markup=rotate_cancel_keyboard()
+    )
+
+    context.user_data["rotate_prompt_message_id"] = message.message_id
+
+    return ROTATE_WAIT_FILE
+
+
+async def remove_rotate_cancel(
+    context,
+    chat_id,
+    message_id
+):
+    try:
+        await context.bot.edit_message_reply_markup(
+            chat_id=chat_id,
+            message_id=message_id,
+            reply_markup=None
+        )
+    except Exception:
+        pass
+
+
+async def rotate_receive_file(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    document = update.effective_message.document
+
+    if not document:
+        return ROTATE_WAIT_FILE
+
+    if document.mime_type != "application/pdf":
+        await update.effective_message.reply_text(
+            "❌ Please send a PDF file."
+        )
+        return ROTATE_WAIT_FILE
+
+    prompt_message_id = context.user_data.get(
+        "rotate_prompt_message_id"
+    )
+
+    if prompt_message_id:
+        await remove_rotate_cancel(
+            context,
+            update.effective_chat.id,
+            prompt_message_id
+        )
+
+    temp_dir = tempfile.mkdtemp()
+
+    try:
+        input_path = os.path.join(
+            temp_dir,
+            "input.pdf"
+        )
+
+        file = await document.get_file()
+        await file.download_to_drive(input_path)
+
+        context.user_data["rotate_dir"] = temp_dir
+        context.user_data["rotate_input"] = input_path
+
+        prompt = await update.effective_message.reply_text(
+            "✅ File received.\n\n"
+            "🔄 Choose how much you want to rotate the PDF:",
+            reply_markup=rotate_angle_keyboard()
+        )
+
+        context.user_data["rotate_prompt_message_id"] = (
+            prompt.message_id
+        )
+
+        return ROTATE_WAIT_ANGLE
+
+    except Exception as e:
+        logger.error(f"Rotate receive error: {e}")
+
+        try:
+            for filename in os.listdir(temp_dir):
+                os.remove(os.path.join(temp_dir, filename))
+            os.rmdir(temp_dir)
+        except Exception:
+            pass
+
+        await update.effective_message.reply_text(
+            "❌ I couldn't receive the PDF."
+        )
+
+        return ROTATE_WAIT_FILE
+
+
+async def rotate_angle_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    await query.answer()
+
+    angle = int(
+        query.data.replace(
+            "rotate_",
+            ""
+        )
+    )
+
+    await query.message.edit_reply_markup(
+        reply_markup=None
+    )
+
+    context.user_data["rotate_angle"] = angle
+
+    prompt = await query.message.reply_text(
+        "📄 What would you like to name the rotated PDF?\n\n"
+        "Example: Rotated Document\n\n"
+        "You don't need to type .pdf",
+        reply_markup=rotate_cancel_keyboard()
+    )
+
+    context.user_data["rotate_prompt_message_id"] = (
+        prompt.message_id
+    )
+
+    return ROTATE_WAIT_NAME
+
+
+async def rotate_receive_name(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    name = update.effective_message.text.strip()
+
+    if not name:
+        await update.effective_message.reply_text(
+            "❌ Please enter a PDF name."
+        )
+        return ROTATE_WAIT_NAME
+
+    prompt_message_id = context.user_data.get(
+        "rotate_prompt_message_id"
+    )
+
+    if prompt_message_id:
+        await remove_rotate_cancel(
+            context,
+            update.effective_chat.id,
+            prompt_message_id
+        )
+
+    if name.lower().endswith(".pdf"):
+        name = name[:-4]
+
+    safe_name = "".join(
+        c for c in name
+        if c.isalnum() or c in " -_()"
+    ).strip()
+
+    if not safe_name:
+        await update.effective_message.reply_text(
+            "❌ Please choose a valid PDF name.",
+            reply_markup=rotate_cancel_keyboard()
+        )
+        return ROTATE_WAIT_NAME
+
+    input_path = context.user_data.get("rotate_input")
+    temp_dir = context.user_data.get("rotate_dir")
+    angle = context.user_data.get("rotate_angle")
+
+    if not input_path or not temp_dir or not angle:
+        await update.effective_message.reply_text(
+            "❌ Rotation information was lost.",
+            reply_markup=main_menu_button()
+        )
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    output_path = os.path.join(
+        temp_dir,
+        safe_name + ".pdf"
+    )
+
+    try:
+        await update.effective_message.reply_text(
+            "⏳ Rotating your PDF...\n\n"
+            "Please wait."
+        )
+
+        reader = PdfReader(input_path)
+        writer = PdfWriter()
+
+        for page in reader.pages:
+            page.rotate(angle)
+            writer.add_page(page)
+
+        with open(output_path, "wb") as output_file:
+            writer.write(output_file)
+
+        with open(output_path, "rb") as pdf_file:
+            await update.effective_message.reply_document(
+                document=pdf_file,
+                filename=safe_name + ".pdf",
+                caption=f"🔄 PDF rotated {angle}° successfully.",
+                reply_markup=main_menu_button()
+            )
+
+    except Exception as e:
+        logger.error(f"Rotate PDF error: {e}")
+
+        await update.effective_message.reply_text(
+            "❌ Unable to rotate this PDF.",
+            reply_markup=main_menu_button()
+        )
+
+    finally:
+        try:
+            if temp_dir and os.path.exists(temp_dir):
+                for filename in os.listdir(temp_dir):
+                    file_path = os.path.join(
+                        temp_dir,
+                        filename
+                    )
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                os.rmdir(temp_dir)
+        except Exception:
+            pass
+
+        context.user_data.clear()
+
+    return ConversationHandler.END
+
+
+async def rotate_cancel(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    await query.answer()
+
+    temp_dir = context.user_data.get("rotate_dir")
+
+    if temp_dir and os.path.exists(temp_dir):
+        try:
+            for filename in os.listdir(temp_dir):
+                file_path = os.path.join(
+                    temp_dir,
+                    filename
+                )
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+            os.rmdir(temp_dir)
+        except Exception as e:
+            logger.warning(
+                f"Rotate cancel cleanup error: {e}"
+            )
+
+    context.user_data.clear()
+
+    await query.message.edit_text(
+        "🏠 NovaPDF AI\n\nChoose a tool:",
+        reply_markup=main_keyboard()
+    )
+
+    return ConversationHandler.END
+
+
 # =========================
 # COMING SOON FEATURES
 # =========================
@@ -2428,6 +2738,71 @@ def main():
     )
 
     app.add_handler(watermark_handler)
+
+    # Rotate PDF
+    rotate_handler = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(
+                rotate_start,
+                pattern="^rotate$"
+            ),
+            MessageHandler(
+                filters.Regex("^🔄 Rotate PDF$"),
+                rotate_start
+            )
+        ],
+        states={
+            ROTATE_WAIT_FILE: [
+                MessageHandler(
+                    filters.Document.PDF,
+                    rotate_receive_file
+                ),
+                CallbackQueryHandler(
+                    rotate_cancel,
+                    pattern="^rotate_cancel$"
+                )
+            ],
+
+            ROTATE_WAIT_ANGLE: [
+                CallbackQueryHandler(
+                    rotate_angle_callback,
+                    pattern="^rotate_(90|180|270)$"
+                ),
+                CallbackQueryHandler(
+                    rotate_cancel,
+                    pattern="^rotate_cancel$"
+                )
+            ],
+
+            ROTATE_WAIT_NAME: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    rotate_receive_name
+                ),
+                CallbackQueryHandler(
+                    rotate_cancel,
+                    pattern="^rotate_cancel$"
+                )
+            ]
+        },
+
+        fallbacks=[
+            CallbackQueryHandler(
+                rotate_cancel,
+                pattern="^rotate_cancel$"
+            ),
+            CallbackQueryHandler(
+                inline_back_handler,
+                pattern="^back$"
+            ),
+            CommandHandler(
+                "cancel",
+                cancel
+            )
+        ]
+    )
+
+    app.add_handler(rotate_handler)
 
     # Text to PDF
     text_to_pdf_handler = ConversationHandler(
