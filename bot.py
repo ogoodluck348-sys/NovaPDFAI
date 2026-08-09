@@ -780,21 +780,75 @@ async def merge_receive_name(update: Update, context: ContextTypes.DEFAULT_TYPE)
 # TEXT TO PDF
 # =========================
 
+async def text_to_pdf_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+
+    if query:
+        await query.answer()
+        chat_id = update.effective_chat.id
+
+        # Delete the user's tracked text messages where possible.
+        for message_id in context.user_data.get("text_to_pdf_user_messages", []):
+            try:
+                await context.bot.delete_message(
+                    chat_id=chat_id,
+                    message_id=message_id
+                )
+            except Exception:
+                pass
+
+        # Delete tracked bot messages where possible.
+        for message_id in context.user_data.get("text_to_pdf_bot_messages", []):
+            try:
+                await context.bot.delete_message(
+                    chat_id=chat_id,
+                    message_id=message_id
+                )
+            except Exception:
+                pass
+
+        # Clear all current Text-to-PDF data.
+        context.user_data.clear()
+
+        # Return to the main menu without sending a new message.
+        try:
+            await query.message.edit_text(
+                "🏠 NovaPDF AI\n\nChoose a tool:",
+                reply_markup=main_keyboard()
+            )
+        except Exception:
+            pass
+
+    return ConversationHandler.END
+
+
 async def text_to_pdf_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query:
         await update.callback_query.answer()
 
-    await update.effective_message.reply_text(
+    context.user_data.clear()
+    context.user_data["text_to_pdf_user_messages"] = []
+    context.user_data["text_to_pdf_bot_messages"] = []
+
+    sent = await update.effective_message.reply_text(
         "📝 Send the text you want to convert to PDF.\n\n"
-        "You can send a short or long text."
-    ,
-        reply_markup=back_keyboard()
+        "You can send a short or long text.",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("❌ Cancel", callback_data="texttopdf_cancel")]
+        ])
     )
+
+    context.user_data["text_to_pdf_bot_messages"].append(sent.message_id)
+
     return TEXT_TO_PDF_WAIT_TEXT
 
 
 async def text_to_pdf_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.effective_message.text
+
+    # Track the user's text message so Cancel can remove it when Telegram allows.
+    message_id = update.effective_message.message_id
+    context.user_data.setdefault("text_to_pdf_user_messages", []).append(message_id)
 
     if not text or not text.strip():
         await update.effective_message.reply_text(
@@ -840,7 +894,8 @@ async def text_to_pdf_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not text:
         await update.effective_message.reply_text(
-            "❌ Your text could not be found. Please start again with /texttopdf."
+            "❌ Your text could not be found. Please start again with /texttopdf.",
+            reply_markup=main_menu_button()
         )
         return ConversationHandler.END
 
@@ -1647,6 +1702,10 @@ def main():
     ]
 },
         fallbacks=[
+            CallbackQueryHandler(
+                text_to_pdf_cancel,
+                pattern="^texttopdf_cancel$"
+            ),
             CallbackQueryHandler(
                 inline_back_handler,
                 pattern="^back$"
