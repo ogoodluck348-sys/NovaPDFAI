@@ -68,6 +68,7 @@ EXTRACT_WAIT_PDF = 4
 SUMMARY_WAIT_PDF = 5
 TEXT_TO_PDF_WAIT_TEXT = 6
 TEXT_TO_PDF_WAIT_NAME = 7
+TEXT_TO_PDF_WAIT_CUSTOMIZE = 21
 MERGE_WAIT_NAME = 8
 WATERMARK_WAIT_FILE = 9
 WATERMARK_WAIT_TEXT = 10
@@ -864,51 +865,139 @@ async def merge_receive_name(update: Update, context: ContextTypes.DEFAULT_TYPE)
 # TEXT TO PDF
 # =========================
 
-async def text_to_pdf_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def text_to_pdf_customize_keyboard(context):
+    font = context.user_data.get("text_pdf_font", "Helvetica")
+    color = context.user_data.get("text_pdf_color", "black")
+    page_numbers = context.user_data.get("text_pdf_page_numbers", False)
+
+    font_names = {
+        "Helvetica": "Helvetica",
+        "Times-Roman": "Times",
+        "Courier": "Courier"
+    }
+
+    color_names = {
+        "black": "Black",
+        "blue": "Blue",
+        "red": "Red"
+    }
+
+    page_status = "ON" if page_numbers else "OFF"
+
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                f"🔤 Font: {font_names.get(font, font)}",
+                callback_data="textpdf_font"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"🎨 Text Color: {color_names.get(color, color)}",
+                callback_data="textpdf_color"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"🔢 Page Numbers: {page_status}",
+                callback_data="textpdf_pages"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "✅ Create PDF",
+                callback_data="textpdf_create"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "❌ Cancel",
+                callback_data="texttopdf_cancel"
+            )
+        ]
+    ])
+
+
+def text_to_pdf_font_keyboard():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "Arial",
+                callback_data="textpdf_font_helvetica"
+            ),
+            InlineKeyboardButton(
+                "Times New Roman",
+                callback_data="textpdf_font_times"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "Courier",
+                callback_data="textpdf_font_courier"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "⬅️ Back",
+                callback_data="textpdf_customize"
+            )
+        ]
+    ])
+
+
+def text_to_pdf_color_keyboard():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "⚫ Black",
+                callback_data="textpdf_color_black"
+            ),
+            InlineKeyboardButton(
+                "🔵 Blue",
+                callback_data="textpdf_color_blue"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "🔴 Red",
+                callback_data="textpdf_color_red"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "⬅️ Back",
+                callback_data="textpdf_customize"
+            )
+        ]
+    ])
+
+
+async def text_to_pdf_cancel(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     query = update.callback_query
     await query.answer()
 
-    chat_id = update.effective_chat.id
-    current_message_id = query.message.message_id
-
-    # Delete tracked user messages.
-    for message_id in context.user_data.get("text_to_pdf_user_messages", []):
-        try:
-            await context.bot.delete_message(
-                chat_id=chat_id,
-                message_id=message_id
-            )
-        except Exception:
-            pass
-
-    # Delete tracked bot messages EXCEPT the message containing Cancel.
-    for message_id in context.user_data.get("text_to_pdf_bot_messages", []):
-        if message_id == current_message_id:
-            continue
-        try:
-            await context.bot.delete_message(
-                chat_id=chat_id,
-                message_id=message_id
-            )
-        except Exception:
-            pass
-
-    # Clear Text-to-PDF session data.
     context.user_data.clear()
 
-    # Turn the current message directly into the main menu.
     try:
         await query.message.edit_text(
             "🏠 NovaPDF AI\n\nChoose a tool:",
             reply_markup=main_keyboard()
         )
     except Exception as e:
-        logger.warning(f"Could not restore main menu after Text-to-PDF cancel: {e}")
+        logger.warning(
+            f"Could not restore main menu after Text-to-PDF cancel: {e}"
+        )
 
     return ConversationHandler.END
 
 
-async def text_to_pdf_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def text_to_pdf_start(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     query = update.callback_query
 
     if query:
@@ -918,39 +1007,49 @@ async def text_to_pdf_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message = update.effective_message
 
     context.user_data.clear()
-    context.user_data["text_to_pdf_user_messages"] = []
-    context.user_data["text_to_pdf_bot_messages"] = []
+
+    context.user_data["text_pdf_font"] = "Helvetica"
+    context.user_data["text_pdf_color"] = "black"
+    context.user_data["text_pdf_page_numbers"] = False
 
     text = (
-        "📝 Send the text you want to convert to PDF.\\n\\n"
+        "📝 Send the text you want to convert to PDF.\n\n"
         "You can send a short or long text."
     )
 
     if query:
         await message.edit_text(
             text,
-            reply_markup=back_keyboard()
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        "❌ Cancel",
+                        callback_data="texttopdf_cancel"
+                    )
+                ]
+            ])
         )
     else:
-        sent = await message.reply_text(
+        await message.reply_text(
             text,
-            reply_markup=back_keyboard()
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        "❌ Cancel",
+                        callback_data="texttopdf_cancel"
+                    )
+                ]
+            ])
         )
-        message = sent
-
-    context.user_data["text_to_pdf_bot_messages"].append(
-        message.message_id
-    )
 
     return TEXT_TO_PDF_WAIT_TEXT
 
 
-async def text_to_pdf_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def text_to_pdf_receive(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     text = update.effective_message.text
-
-    # Track the user's text message so Cancel can remove it when Telegram allows.
-    message_id = update.effective_message.message_id
-    context.user_data.setdefault("text_to_pdf_user_messages", []).append(message_id)
 
     if not text or not text.strip():
         await update.effective_message.reply_text(
@@ -960,23 +1059,27 @@ async def text_to_pdf_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     context.user_data["pdf_text"] = text
 
-    sent = await update.effective_message.reply_text(
-        "📄 What would you like to name your PDF?\n\n"
-        "Example: Biology Notes\n\n"
+    await update.effective_message.reply_text(
+        "📄 What would you like to name your PDF?\\n\\n"
+        "Example: Biology Notes\\n\\n"
         "You don't need to type .pdf",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("❌ Cancel", callback_data="texttopdf_cancel")]
+            [
+                InlineKeyboardButton(
+                    "❌ Cancel",
+                    callback_data="texttopdf_cancel"
+                )
+            ]
         ])
     )
-
-    context.user_data.setdefault(
-        "text_to_pdf_bot_messages", []
-    ).append(sent.message_id)
 
     return TEXT_TO_PDF_WAIT_NAME
 
 
-async def text_to_pdf_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def text_to_pdf_name(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     name = update.effective_message.text.strip()
 
     if not name:
@@ -999,28 +1102,200 @@ async def text_to_pdf_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return TEXT_TO_PDF_WAIT_NAME
 
+    context.user_data["pdf_name"] = safe_name
+
+    await update.effective_message.reply_text(
+        "🎨 Customize your PDF\\n\\n"
+        "Choose what you want to change:",
+        reply_markup=text_to_pdf_customize_keyboard(context)
+    )
+
+    return TEXT_TO_PDF_WAIT_CUSTOMIZE
+
+
+async def text_to_pdf_customize(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    await query.answer()
+
+    await query.message.edit_text(
+        "🎨 Customize your PDF\n\n"
+        "Choose what you want to change:",
+        reply_markup=text_to_pdf_customize_keyboard(context)
+    )
+
+    return TEXT_TO_PDF_WAIT_CUSTOMIZE
+
+
+async def text_to_pdf_font_menu(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    await query.answer()
+
+    await query.message.edit_text(
+        "🔤 Choose a font:",
+        reply_markup=text_to_pdf_font_keyboard()
+    )
+
+    return TEXT_TO_PDF_WAIT_CUSTOMIZE
+
+
+async def text_to_pdf_font_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    await query.answer()
+
+    font_map = {
+        "textpdf_font_helvetica": "Helvetica",
+        "textpdf_font_times": "Times-Roman",
+        "textpdf_font_courier": "Courier"
+    }
+
+    context.user_data["text_pdf_font"] = font_map.get(
+        query.data,
+        "Helvetica"
+    )
+
+    await query.message.edit_text(
+        "🎨 Customize your PDF\n\n"
+        "Choose what you want to change:",
+        reply_markup=text_to_pdf_customize_keyboard(context)
+    )
+
+    return TEXT_TO_PDF_WAIT_CUSTOMIZE
+
+
+async def text_to_pdf_color_menu(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    await query.answer()
+
+    await query.message.edit_text(
+        "🎨 Choose a text color:",
+        reply_markup=text_to_pdf_color_keyboard()
+    )
+
+    return TEXT_TO_PDF_WAIT_CUSTOMIZE
+
+
+async def text_to_pdf_color_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    await query.answer()
+
+    color_map = {
+        "textpdf_color_black": "black",
+        "textpdf_color_blue": "blue",
+        "textpdf_color_red": "red"
+    }
+
+    context.user_data["text_pdf_color"] = color_map.get(
+        query.data,
+        "black"
+    )
+
+    await query.message.edit_text(
+        "🎨 Customize your PDF\n\n"
+        "Choose what you want to change:",
+        reply_markup=text_to_pdf_customize_keyboard(context)
+    )
+
+    return TEXT_TO_PDF_WAIT_CUSTOMIZE
+
+
+async def text_to_pdf_pages_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    await query.answer()
+
+    current = context.user_data.get(
+        "text_pdf_page_numbers",
+        False
+    )
+
+    context.user_data["text_pdf_page_numbers"] = not current
+
+    await query.message.edit_text(
+        "🎨 Customize your PDF\n\n"
+        "Choose what you want to change:",
+        reply_markup=text_to_pdf_customize_keyboard(context)
+    )
+
+    return TEXT_TO_PDF_WAIT_CUSTOMIZE
+
+
+async def text_to_pdf_create(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    await query.answer()
+
     text = context.user_data.get("pdf_text")
+    pdf_name = context.user_data.get("pdf_name", "NovaPDF")
 
     if not text:
-        await update.effective_message.reply_text(
-            "❌ Your text could not be found. Please start again with /texttopdf.",
+        await query.message.edit_text(
+            "❌ Your text could not be found.",
             reply_markup=main_menu_button()
         )
+        context.user_data.clear()
         return ConversationHandler.END
 
+    font = context.user_data.get(
+        "text_pdf_font",
+        "Helvetica"
+    )
+
+    color_name = context.user_data.get(
+        "text_pdf_color",
+        "black"
+    )
+
+    page_numbers = context.user_data.get(
+        "text_pdf_page_numbers",
+        False
+    )
+
+    color_map = {
+        "black": "black",
+        "blue": "blue",
+        "red": "red"
+    }
+
     try:
-        await update.effective_message.reply_text(
-            "⏳ Creating your PDF..."
+        await query.message.edit_text(
+            "⏳ Creating your customized PDF..."
         )
 
-        pdf_path = f"{safe_name}.pdf"
-
         from reportlab.lib.pagesizes import A4
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.platypus import (
+            SimpleDocTemplate,
+            Paragraph,
+            Spacer
+        )
+        from reportlab.lib.styles import (
+            getSampleStyleSheet,
+            ParagraphStyle
+        )
         from reportlab.lib.enums import TA_LEFT
         from reportlab.lib.units import mm
+        from reportlab.lib import colors
         from xml.sax.saxutils import escape
+
+        pdf_path = f"{pdf_name}.pdf"
 
         doc = SimpleDocTemplate(
             pdf_path,
@@ -1034,11 +1309,16 @@ async def text_to_pdf_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         styles = getSampleStyleSheet()
 
         body_style = ParagraphStyle(
-            "BodyText",
+            "NovaPDFBody",
             parent=styles["BodyText"],
+            fontName=font,
             fontSize=11,
             leading=16,
             alignment=TA_LEFT,
+            textColor=getattr(
+                colors,
+                color_map.get(color_name, "black")
+            ),
             spaceAfter=8
         )
 
@@ -1056,33 +1336,64 @@ async def text_to_pdf_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 story.append(Spacer(1, 4))
 
-        doc.build(story)
+        def add_page_number(canvas, doc):
+            canvas.saveState()
+
+            canvas.setFont(
+                "Helvetica",
+                9
+            )
+
+            canvas.setFillColor(colors.grey)
+
+            canvas.drawCentredString(
+                A4[0] / 2,
+                10 * mm,
+                f"{doc.page}"
+            )
+
+            canvas.restoreState()
+
+        if page_numbers:
+            doc.build(
+                story,
+                onFirstPage=add_page_number,
+                onLaterPages=add_page_number
+            )
+        else:
+            doc.build(story)
 
         with open(pdf_path, "rb") as pdf_file:
-            await update.effective_message.reply_document(
+            await query.message.reply_document(
                 document=pdf_file,
-                filename=f"{safe_name}.pdf",
-                caption=f"📄 {safe_name}.pdf",
+                filename=f"{pdf_name}.pdf",
+                caption=f"📄 {pdf_name}.pdf created successfully.",
                 reply_markup=main_menu_button()
             )
 
-
         import os
-        os.remove(pdf_path)
 
-        context.user_data.pop("pdf_text", None)
+        if os.path.exists(pdf_path):
+            os.remove(pdf_path)
+
+        context.user_data.clear()
 
         return ConversationHandler.END
 
     except Exception as e:
-        logger.error(f"Text to PDF error: {e}")
+        logger.error(
+            f"Text to PDF error: {e}"
+        )
 
-        await update.effective_message.reply_text(
+        await query.message.edit_text(
             "❌ Sorry, I couldn't create the PDF.",
             reply_markup=main_menu_button()
         )
 
+        context.user_data.clear()
+
         return ConversationHandler.END
+
 
 # =========================
 # EXTRACT PDF TEXT
@@ -3912,7 +4223,10 @@ def main():
     # Text to PDF
     text_to_pdf_handler = ConversationHandler(
         entry_points=[
-            CallbackQueryHandler(text_to_pdf_start, pattern="^texttopdf$"),
+            CallbackQueryHandler(
+                text_to_pdf_start,
+                pattern="^texttopdf$"
+            ),
             MessageHandler(
                 filters.Regex("^📝 Text to PDF$"),
                 text_to_pdf_start
@@ -3923,19 +4237,52 @@ def main():
             )
         ],
         states={
-    TEXT_TO_PDF_WAIT_TEXT: [
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            text_to_pdf_receive
-        )
-    ],
-    TEXT_TO_PDF_WAIT_NAME: [
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            text_to_pdf_name
-        )
-    ]
-},
+            TEXT_TO_PDF_WAIT_TEXT: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    text_to_pdf_receive
+                ),
+                CallbackQueryHandler(
+                    text_to_pdf_cancel,
+                    pattern="^texttopdf_cancel$"
+                )
+            ],
+
+            TEXT_TO_PDF_WAIT_CUSTOMIZE: [
+                CallbackQueryHandler(
+                    text_to_pdf_font_menu,
+                    pattern="^textpdf_font$"
+                ),
+                CallbackQueryHandler(
+                    text_to_pdf_font_callback,
+                    pattern="^textpdf_font_(helvetica|times|courier)$"
+                ),
+                CallbackQueryHandler(
+                    text_to_pdf_color_menu,
+                    pattern="^textpdf_color$"
+                ),
+                CallbackQueryHandler(
+                    text_to_pdf_color_callback,
+                    pattern="^textpdf_color_(black|blue|red)$"
+                ),
+                CallbackQueryHandler(
+                    text_to_pdf_pages_callback,
+                    pattern="^textpdf_pages$"
+                ),
+                CallbackQueryHandler(
+                    text_to_pdf_create,
+                    pattern="^textpdf_create$"
+                ),
+                CallbackQueryHandler(
+                    text_to_pdf_customize,
+                    pattern="^textpdf_customize$"
+                ),
+                CallbackQueryHandler(
+                    text_to_pdf_cancel,
+                    pattern="^texttopdf_cancel$"
+                )
+            ]
+        },
         fallbacks=[
             CallbackQueryHandler(
                 text_to_pdf_cancel,
@@ -3945,7 +4292,10 @@ def main():
                 inline_back_handler,
                 pattern="^back$"
             ),
-            CommandHandler("cancel", cancel)
+            CommandHandler(
+                "cancel",
+                cancel
+            )
         ]
     )
 
