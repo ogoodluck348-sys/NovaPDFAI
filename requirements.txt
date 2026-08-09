@@ -3,3 +3,4 @@ PyPDF2
 reportlab
 google-generativeai
 Pillow
+qrcode
