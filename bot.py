@@ -2115,7 +2115,8 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📢 Broadcast complete!\n\n"
         f"✅ Sent: {sent}\n"
         f"❌ Failed: {failed}\n"
-        f"👥 Total: {total}"
+        f"👥 Total: {total}",
+        reply_markup=main_menu_button()
     )
 
 async def inline_main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
