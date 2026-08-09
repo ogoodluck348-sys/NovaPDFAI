@@ -22,6 +22,7 @@ from telegram.ext import (
 
 from PyPDF2 import PdfReader, PdfWriter, PdfMerger
 from PIL import Image, ImageDraw, ImageFont
+from images_to_pdf_functions import *
 from reportlab.pdfgen import canvas
 from reportlab.lib.colors import Color
 
@@ -139,7 +140,10 @@ def main_keyboard():
             InlineKeyboardButton("📉 Compress PDF", callback_data="compress")
         ],
         [
-            InlineKeyboardButton("📝 Text to PDF", callback_data="texttopdf"),
+            InlineKeyboardButton("🖼️ Images → PDF", callback_data="images_to_pdf"),
+            InlineKeyboardButton("📝 Text to PDF", callback_data="texttopdf")
+        ],
+        [
             InlineKeyboardButton("➕ More", callback_data="more")
         ]
     ]
@@ -3550,6 +3554,65 @@ def main():
     )
 
     app.add_handler(images_handler)
+
+    # Images to PDF
+    images_to_pdf_handler = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(
+                images_to_pdf_start,
+                pattern="^images_to_pdf$"
+            ),
+            MessageHandler(
+                filters.Regex("^🖼️ Images → PDF$"),
+                images_to_pdf_start
+            )
+        ],
+
+        states={
+            IMG_PDF_WAIT_IMAGES: [
+                MessageHandler(
+                    filters.PHOTO | filters.Document.IMAGE,
+                    images_to_pdf_receive_image
+                ),
+                CallbackQueryHandler(
+                    images_to_pdf_done,
+                    pattern="^images_to_pdf_done$"
+                ),
+                CallbackQueryHandler(
+                    images_to_pdf_cancel,
+                    pattern="^images_to_pdf_cancel$"
+                )
+            ],
+
+            IMG_PDF_WAIT_NAME: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    images_to_pdf_receive_name
+                ),
+                CallbackQueryHandler(
+                    images_to_pdf_cancel,
+                    pattern="^images_to_pdf_cancel$"
+                )
+            ]
+        },
+
+        fallbacks=[
+            CallbackQueryHandler(
+                images_to_pdf_cancel,
+                pattern="^images_to_pdf_cancel$"
+            ),
+            CallbackQueryHandler(
+                inline_back_handler,
+                pattern="^back$"
+            ),
+            CommandHandler(
+                "cancel",
+                cancel
+            )
+        ]
+    )
+
+    app.add_handler(images_to_pdf_handler)
 
     # Compress PDF
     compress_handler = ConversationHandler(

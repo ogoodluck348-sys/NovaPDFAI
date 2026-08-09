@@ -2,3 +2,4 @@ python-telegram-bot
 PyPDF2
 reportlab
 google-generativeai
+Pillow
