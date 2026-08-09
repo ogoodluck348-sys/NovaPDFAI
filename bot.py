@@ -782,42 +782,44 @@ async def merge_receive_name(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def text_to_pdf_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    await query.answer()
 
-    if query:
-        await query.answer()
-        chat_id = update.effective_chat.id
+    chat_id = update.effective_chat.id
+    current_message_id = query.message.message_id
 
-        # Delete the user's tracked text messages where possible.
-        for message_id in context.user_data.get("text_to_pdf_user_messages", []):
-            try:
-                await context.bot.delete_message(
-                    chat_id=chat_id,
-                    message_id=message_id
-                )
-            except Exception:
-                pass
-
-        # Delete tracked bot messages where possible.
-        for message_id in context.user_data.get("text_to_pdf_bot_messages", []):
-            try:
-                await context.bot.delete_message(
-                    chat_id=chat_id,
-                    message_id=message_id
-                )
-            except Exception:
-                pass
-
-        # Clear all current Text-to-PDF data.
-        context.user_data.clear()
-
-        # Return to the main menu without sending a new message.
+    # Delete tracked user messages.
+    for message_id in context.user_data.get("text_to_pdf_user_messages", []):
         try:
-            await query.message.edit_text(
-                "🏠 NovaPDF AI\n\nChoose a tool:",
-                reply_markup=main_keyboard()
+            await context.bot.delete_message(
+                chat_id=chat_id,
+                message_id=message_id
             )
         except Exception:
             pass
+
+    # Delete tracked bot messages EXCEPT the message containing Cancel.
+    for message_id in context.user_data.get("text_to_pdf_bot_messages", []):
+        if message_id == current_message_id:
+            continue
+        try:
+            await context.bot.delete_message(
+                chat_id=chat_id,
+                message_id=message_id
+            )
+        except Exception:
+            pass
+
+    # Clear Text-to-PDF session data.
+    context.user_data.clear()
+
+    # Turn the current message directly into the main menu.
+    try:
+        await query.message.edit_text(
+            "🏠 NovaPDF AI\n\nChoose a tool:",
+            reply_markup=main_keyboard()
+        )
+    except Exception as e:
+        logger.warning(f"Could not restore main menu after Text-to-PDF cancel: {e}")
 
     return ConversationHandler.END
 
