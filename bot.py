@@ -72,6 +72,9 @@ WATERMARK_WAIT_COLOR = 12
 ROTATE_WAIT_FILE = 13
 ROTATE_WAIT_ANGLE = 14
 ROTATE_WAIT_NAME = 15
+IMAGES_WAIT_FILE = 16
+IMAGES_WAIT_FORMAT = 17
+
 
 
 
@@ -2345,6 +2348,344 @@ async def rotate_cancel(
     return ConversationHandler.END
 
 
+
+# =========================
+# PDF TO IMAGES
+# =========================
+
+def images_cancel_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Cancel", callback_data="images_cancel")]
+    ])
+
+
+def images_format_keyboard():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🖼️ JPG", callback_data="images_jpg"),
+            InlineKeyboardButton("🖼️ PNG", callback_data="images_png")
+        ],
+        [
+            InlineKeyboardButton("❌ Cancel", callback_data="images_cancel")
+        ]
+    ])
+
+
+async def images_start(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+
+    if query:
+        await query.answer()
+        message = query.message
+    else:
+        message = update.effective_message
+
+    context.user_data.clear()
+
+    await message.edit_text(
+        "🖼️ PDF to Images\n\n"
+        "Send the PDF you want to convert into images.",
+        reply_markup=images_cancel_keyboard()
+    )
+
+    context.user_data["images_prompt_message_id"] = (
+        message.message_id
+    )
+
+    return IMAGES_WAIT_FILE
+
+
+async def remove_images_cancel(
+    context,
+    chat_id,
+    message_id
+):
+    try:
+        await context.bot.edit_message_reply_markup(
+            chat_id=chat_id,
+            message_id=message_id,
+            reply_markup=None
+        )
+    except Exception:
+        pass
+
+
+async def images_receive_file(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    document = update.effective_message.document
+
+    if not document:
+        return IMAGES_WAIT_FILE
+
+    if document.mime_type != "application/pdf":
+        await update.effective_message.reply_text(
+            "❌ Please send a PDF file."
+        )
+        return IMAGES_WAIT_FILE
+
+    prompt_message_id = context.user_data.get(
+        "images_prompt_message_id"
+    )
+
+    if prompt_message_id:
+        await remove_images_cancel(
+            context,
+            update.effective_chat.id,
+            prompt_message_id
+        )
+
+    temp_dir = tempfile.mkdtemp()
+
+    try:
+        input_path = os.path.join(
+            temp_dir,
+            "input.pdf"
+        )
+
+        file = await document.get_file()
+        await file.download_to_drive(input_path)
+
+        context.user_data["images_dir"] = temp_dir
+        context.user_data["images_input"] = input_path
+
+        prompt = await update.effective_message.reply_text(
+            "✅ File received.\n\n"
+            "🖼️ Choose the image format:",
+            reply_markup=images_format_keyboard()
+        )
+
+        context.user_data["images_prompt_message_id"] = (
+            prompt.message_id
+        )
+
+        return IMAGES_WAIT_FORMAT
+
+    except Exception as e:
+        logger.error(f"PDF image receive error: {e}")
+
+        try:
+            for filename in os.listdir(temp_dir):
+                os.remove(
+                    os.path.join(
+                        temp_dir,
+                        filename
+                    )
+                )
+            os.rmdir(temp_dir)
+        except Exception:
+            pass
+
+        await update.effective_message.reply_text(
+            "❌ I couldn't receive the PDF."
+        )
+
+        return IMAGES_WAIT_FILE
+
+
+async def images_format_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "images_jpg":
+        image_format = "jpg"
+    elif query.data == "images_png":
+        image_format = "png"
+    else:
+        return IMAGES_WAIT_FORMAT
+
+    context.user_data["images_format"] = image_format
+
+    try:
+        await query.message.edit_reply_markup(
+            reply_markup=None
+        )
+    except Exception:
+        pass
+
+    input_path = context.user_data.get("images_input")
+    temp_dir = context.user_data.get("images_dir")
+
+    if not input_path or not temp_dir:
+        await query.message.reply_text(
+            "❌ The PDF could not be found.",
+            reply_markup=main_menu_button()
+        )
+
+        context.user_data.clear()
+
+        return ConversationHandler.END
+
+    try:
+        await query.message.reply_text(
+            "⏳ Converting your PDF to images...\n\n"
+            "Please wait."
+        )
+
+        output_prefix = os.path.join(
+            temp_dir,
+            "page"
+        )
+
+        if image_format == "jpg":
+            command = [
+                "pdftoppm",
+                "-jpeg",
+                "-r",
+                "150",
+                input_path,
+                output_prefix
+            ]
+        else:
+            command = [
+                "pdftoppm",
+                "-png",
+                "-r",
+                "150",
+                input_path,
+                output_prefix
+            ]
+
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+
+        stdout, stderr = await process.communicate()
+
+        if process.returncode != 0:
+            logger.error(
+                f"pdftoppm error: {stderr.decode(errors='ignore')}"
+            )
+
+            await query.message.reply_text(
+                "❌ Unable to convert this PDF.",
+                reply_markup=main_menu_button()
+            )
+
+            return ConversationHandler.END
+
+        extension = "jpg" if image_format == "jpg" else "png"
+
+        image_files = sorted(
+            [
+                os.path.join(temp_dir, filename)
+                for filename in os.listdir(temp_dir)
+                if filename.lower().endswith(
+                    "." + extension
+                )
+            ]
+        )
+
+        if not image_files:
+            await query.message.reply_text(
+                "❌ No pages could be converted.",
+                reply_markup=main_menu_button()
+            )
+
+            return ConversationHandler.END
+
+        total = len(image_files)
+
+        for index, image_path in enumerate(image_files, start=1):
+
+            caption = f"🖼️ Page {index} of {total}"
+
+            is_last = index == total
+
+            with open(image_path, "rb") as image_file:
+
+                await query.message.reply_photo(
+                    photo=image_file,
+                    caption=caption
+                )
+
+        await query.message.reply_text(
+            f"✅ Conversion complete!\n\n"
+            f"🖼️ Pages converted: {total}\n"
+            f"📁 Format: {extension.upper()}",
+            reply_markup=main_menu_button()
+        )
+
+    except Exception as e:
+        logger.error(
+            f"PDF to images error: {e}"
+        )
+
+        await query.message.reply_text(
+            "❌ An error occurred while converting the PDF.",
+            reply_markup=main_menu_button()
+        )
+
+    finally:
+        try:
+            if temp_dir and os.path.exists(temp_dir):
+                for filename in os.listdir(temp_dir):
+                    file_path = os.path.join(
+                        temp_dir,
+                        filename
+                    )
+
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+
+                os.rmdir(temp_dir)
+
+        except Exception:
+            pass
+
+        context.user_data.clear()
+
+    return ConversationHandler.END
+
+
+async def images_cancel(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    await query.answer()
+
+    temp_dir = context.user_data.get(
+        "images_dir"
+    )
+
+    if temp_dir and os.path.exists(temp_dir):
+        try:
+            for filename in os.listdir(temp_dir):
+                file_path = os.path.join(
+                    temp_dir,
+                    filename
+                )
+
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+
+            os.rmdir(temp_dir)
+
+        except Exception as e:
+            logger.warning(
+                f"Images cancel cleanup error: {e}"
+            )
+
+    context.user_data.clear()
+
+    await query.message.edit_text(
+        "🏠 NovaPDF AI\n\nChoose a tool:",
+        reply_markup=main_keyboard()
+    )
+
+    return ConversationHandler.END
+
+
 # =========================
 # COMING SOON FEATURES
 # =========================
@@ -2803,6 +3144,61 @@ def main():
     )
 
     app.add_handler(rotate_handler)
+
+    # PDF to Images
+    images_handler = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(
+                images_start,
+                pattern="^images$"
+            ),
+            MessageHandler(
+                filters.Regex("^🖼️ PDF to Images$"),
+                images_start
+            )
+        ],
+
+        states={
+            IMAGES_WAIT_FILE: [
+                MessageHandler(
+                    filters.Document.PDF,
+                    images_receive_file
+                ),
+                CallbackQueryHandler(
+                    images_cancel,
+                    pattern="^images_cancel$"
+                )
+            ],
+
+            IMAGES_WAIT_FORMAT: [
+                CallbackQueryHandler(
+                    images_format_callback,
+                    pattern="^images_(jpg|png)$"
+                ),
+                CallbackQueryHandler(
+                    images_cancel,
+                    pattern="^images_cancel$"
+                )
+            ]
+        },
+
+        fallbacks=[
+            CallbackQueryHandler(
+                images_cancel,
+                pattern="^images_cancel$"
+            ),
+            CallbackQueryHandler(
+                inline_back_handler,
+                pattern="^back$"
+            ),
+            CommandHandler(
+                "cancel",
+                cancel
+            )
+        ]
+    )
+
+    app.add_handler(images_handler)
 
     # Text to PDF
     text_to_pdf_handler = ConversationHandler(
