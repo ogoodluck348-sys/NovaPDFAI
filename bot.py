@@ -1117,6 +1117,12 @@ async def text_to_pdf_receive(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    await remove_prompt_cancel_button(
+        update,
+        context,
+        "text_pdf_prompt_message_id"
+    )
+
     text = update.effective_message.text
 
     if not text or not text.strip():
@@ -1127,7 +1133,7 @@ async def text_to_pdf_receive(
 
     context.user_data["pdf_text"] = text
 
-    await update.effective_message.reply_text(
+    prompt = await update.effective_message.reply_text(
         "📄 What would you like to name your PDF?\n\n"
         "Example: Biology Notes\n\n"
         "You don't need to type .pdf",
@@ -1141,6 +1147,8 @@ async def text_to_pdf_receive(
         ])
     )
 
+    context.user_data["text_pdf_prompt_message_id"] = prompt.message_id
+
     return TEXT_TO_PDF_WAIT_NAME
 
 
@@ -1148,6 +1156,12 @@ async def text_to_pdf_name(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    await remove_prompt_cancel_button(
+        update,
+        context,
+        "text_pdf_prompt_message_id"
+    )
+
     name = update.effective_message.text.strip()
 
     if not name:
