@@ -1144,7 +1144,7 @@ async def extract_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_invalid_file(
             update,
             "❌ Invalid file.\nPlease send a PDF file.",
-            "extract_cancel"
+            "extract_back"
         )
         return EXTRACT_WAIT_PDF
 
@@ -3539,14 +3539,11 @@ def main():
                     extract_receive
                 ),
                 CallbackQueryHandler(
-                    extract_cancel,
-                    pattern="^extract_cancel$"
                 )
             ]
         },
         fallbacks=[
             CallbackQueryHandler(extract_back, pattern="^extract_back$"),
-            CallbackQueryHandler(extract_cancel, pattern="^extract_cancel$"),
             CommandHandler("cancel", cancel)
         ],
     )
