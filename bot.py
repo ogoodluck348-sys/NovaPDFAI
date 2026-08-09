@@ -1734,6 +1734,32 @@ def main():
     print("✅ NovaPDF AI is running...")
 
 
+    # Render Web Service compatibility
+    # Keep a lightweight HTTP server running while Telegram polling runs.
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    class RenderHealthHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"NovaPDF AI is running.")
+
+        def log_message(self, format, *args):
+            pass
+
+    port = int(os.environ.get("PORT", 10000))
+
+    health_server = HTTPServer(("0.0.0.0", port), RenderHealthHandler)
+
+    threading.Thread(
+        target=health_server.serve_forever,
+        daemon=True
+    ).start()
+
+    logger.info(f"Render health server running on port {port}")
+
     app.run_polling()
 
 
