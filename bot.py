@@ -823,20 +823,38 @@ async def text_to_pdf_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def text_to_pdf_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.callback_query:
-        await update.callback_query.answer()
+    query = update.callback_query
+
+    if query:
+        await query.answer()
+        message = query.message
+    else:
+        message = update.effective_message
 
     context.user_data.clear()
     context.user_data["text_to_pdf_user_messages"] = []
     context.user_data["text_to_pdf_bot_messages"] = []
 
-    sent = await update.effective_message.reply_text(
-        "📝 Send the text you want to convert to PDF.\n\n"
-        "You can send a short or long text.",
-        reply_markup=back_keyboard()
+    text = (
+        "📝 Send the text you want to convert to PDF.\\n\\n"
+        "You can send a short or long text."
     )
 
-    context.user_data["text_to_pdf_bot_messages"].append(sent.message_id)
+    if query:
+        await message.edit_text(
+            text,
+            reply_markup=back_keyboard()
+        )
+    else:
+        sent = await message.reply_text(
+            text,
+            reply_markup=back_keyboard()
+        )
+        message = sent
+
+    context.user_data["text_to_pdf_bot_messages"].append(
+        message.message_id
+    )
 
     return TEXT_TO_PDF_WAIT_TEXT
 
@@ -1672,12 +1690,6 @@ def main():
     app.add_handler(protect_handler)
     app.add_handler(merge_handler)
     app.add_handler(extract_handler)
-    app.add_handler(
-        CallbackQueryHandler(
-            summarize_start,
-            pattern="^summarize$"
-        )
-    )
     app.add_handler(summary_handler)
     # Text to PDF
     text_to_pdf_handler = ConversationHandler(
