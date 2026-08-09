@@ -3346,6 +3346,38 @@ def main():
                     qr_receive_text
                 ),
                 CallbackQueryHandler(
+                    qr_color_callback,
+                    pattern="^qr_color_(black|blue|purple|green|red)$"
+                ),
+                CallbackQueryHandler(
+                    qr_customize_callback,
+                    pattern="^qr_customize$"
+                ),
+                CallbackQueryHandler(
+                    qr_style_callback,
+                    pattern="^qr_style_(square|rounded|dots)$"
+                ),
+                CallbackQueryHandler(
+                    qr_background_callback,
+                    pattern="^qr_bg_(white|lightblue|lightpurple)$"
+                ),
+                CallbackQueryHandler(
+                    qr_color_menu_callback,
+                    pattern="^qr_color$"
+                ),
+                CallbackQueryHandler(
+                    qr_style_menu_callback,
+                    pattern="^qr_style$"
+                ),
+                CallbackQueryHandler(
+                    qr_background_menu_callback,
+                    pattern="^qr_background$"
+                ),
+                CallbackQueryHandler(
+                    qr_generate_callback,
+                    pattern="^qr_generate$"
+                ),
+                CallbackQueryHandler(
                     qr_cancel,
                     pattern="^qr_cancel$"
                 )
