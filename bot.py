@@ -75,7 +75,8 @@ ROTATE_WAIT_NAME = 15
 IMAGES_WAIT_FILE = 16
 IMAGES_WAIT_FORMAT = 17
 COMPRESS_WAIT_FILE = 18
-COMPRESS_WAIT_LEVEL = 19
+COMPRESS_WAIT_NAME = 19
+COMPRESS_WAIT_LEVEL = 20
 
 
 
@@ -2773,16 +2774,14 @@ async def compress_receive_file(
 
         prompt = await update.effective_message.reply_text(
             "✅ File received.\n\n"
-            "📉 Choose compression level:\n\n"
-            "🟢 Low — best quality\n"
-            "🟡 Medium — balanced\n"
-            "🔴 High — smallest file",
-            reply_markup=compress_level_keyboard()
+            "✏️ Now enter the name you want for the compressed PDF.\n\n"
+            "Example: My Compressed PDF",
+            reply_markup=compress_cancel_keyboard()
         )
 
         context.user_data["compress_prompt_message_id"] = prompt.message_id
 
-        return COMPRESS_WAIT_LEVEL
+        return COMPRESS_WAIT_NAME
 
     except Exception as e:
         logger.error(f"Compression file receive error: {e}")
@@ -2799,6 +2798,65 @@ async def compress_receive_file(
         )
 
         return COMPRESS_WAIT_FILE
+
+
+async def compress_receive_name(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    name = update.effective_message.text.strip()
+
+    if not name:
+        await update.effective_message.reply_text(
+            "❌ Please enter a valid PDF name.",
+            reply_markup=compress_cancel_keyboard()
+        )
+        return COMPRESS_WAIT_NAME
+
+    # Remove characters that are unsafe in filenames.
+    safe_name = "".join(
+        c for c in name
+        if c.isalnum() or c in " -_()"
+    ).strip()
+
+    if not safe_name:
+        await update.effective_message.reply_text(
+            "❌ Invalid PDF name. Please try another name.",
+            reply_markup=compress_cancel_keyboard()
+        )
+        return COMPRESS_WAIT_NAME
+
+    if not safe_name.lower().endswith(".pdf"):
+        safe_name += ".pdf"
+
+    context.user_data["compress_filename"] = safe_name
+
+    prompt_message_id = context.user_data.get(
+        "compress_prompt_message_id"
+    )
+
+    if prompt_message_id:
+        try:
+            await context.bot.edit_message_reply_markup(
+                chat_id=update.effective_chat.id,
+                message_id=prompt_message_id,
+                reply_markup=None
+            )
+        except Exception:
+            pass
+
+    prompt = await update.effective_message.reply_text(
+        "📄 File name: " + safe_name + "\n\n"
+        "📉 Now choose compression level:\n\n"
+        "🟢 Low — best quality\n"
+        "🟡 Medium — balanced\n"
+        "🔴 High — smallest file",
+        reply_markup=compress_level_keyboard()
+    )
+
+    context.user_data["compress_prompt_message_id"] = prompt.message_id
+
+    return COMPRESS_WAIT_LEVEL
 
 
 async def compress_level_callback(
@@ -2909,7 +2967,7 @@ async def compress_level_callback(
         with open(final_path, "rb") as pdf_file:
             await query.message.reply_document(
                 document=pdf_file,
-                filename="compressed.pdf",
+                filename=context.user_data.get("compress_filename", "compressed.pdf"),
                 caption=(
                     "✅ Compression complete!\n\n"
                     f"📦 Original: {format_size(original_size)}\n"
@@ -3511,6 +3569,17 @@ def main():
                 MessageHandler(
                     filters.Document.PDF,
                     compress_receive_file
+                ),
+                CallbackQueryHandler(
+                    compress_cancel,
+                    pattern="^compress_cancel$"
+                )
+            ],
+
+            COMPRESS_WAIT_NAME: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    compress_receive_name
                 ),
                 CallbackQueryHandler(
                     compress_cancel,
