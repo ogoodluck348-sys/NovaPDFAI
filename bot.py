@@ -1060,8 +1060,8 @@ async def text_to_pdf_receive(
     context.user_data["pdf_text"] = text
 
     await update.effective_message.reply_text(
-        "📄 What would you like to name your PDF?\\n\\n"
-        "Example: Biology Notes\\n\\n"
+        "📄 What would you like to name your PDF?\n\n"
+        "Example: Biology Notes\n\n"
         "You don't need to type .pdf",
         reply_markup=InlineKeyboardMarkup([
             [
@@ -1105,7 +1105,7 @@ async def text_to_pdf_name(
     context.user_data["pdf_name"] = safe_name
 
     await update.effective_message.reply_text(
-        "🎨 Customize your PDF\\n\\n"
+        "🎨 Customize your PDF\n\n"
         "Choose what you want to change:",
         reply_markup=text_to_pdf_customize_keyboard(context)
     )
@@ -4241,6 +4241,17 @@ def main():
                 MessageHandler(
                     filters.TEXT & ~filters.COMMAND,
                     text_to_pdf_receive
+                ),
+                CallbackQueryHandler(
+                    text_to_pdf_cancel,
+                    pattern="^texttopdf_cancel$"
+                )
+            ],
+
+            TEXT_TO_PDF_WAIT_NAME: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    text_to_pdf_name
                 ),
                 CallbackQueryHandler(
                     text_to_pdf_cancel,
