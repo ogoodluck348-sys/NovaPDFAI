@@ -74,6 +74,9 @@ ROTATE_WAIT_ANGLE = 14
 ROTATE_WAIT_NAME = 15
 IMAGES_WAIT_FILE = 16
 IMAGES_WAIT_FORMAT = 17
+COMPRESS_WAIT_FILE = 18
+COMPRESS_WAIT_LEVEL = 19
+
 
 
 
@@ -2686,6 +2689,296 @@ async def images_cancel(
     return ConversationHandler.END
 
 
+
+# =========================
+# COMPRESS PDF
+# =========================
+
+def compress_cancel_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Cancel", callback_data="compress_cancel")]
+    ])
+
+
+def compress_level_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🟢 Low", callback_data="compress_low")],
+        [InlineKeyboardButton("🟡 Medium", callback_data="compress_medium")],
+        [InlineKeyboardButton("🔴 High", callback_data="compress_high")],
+        [InlineKeyboardButton("❌ Cancel", callback_data="compress_cancel")]
+    ])
+
+
+async def compress_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+
+    if query:
+        await query.answer()
+        message = query.message
+    else:
+        message = update.effective_message
+
+    context.user_data.clear()
+
+    await message.edit_text(
+        "📉 Compress PDF\n\n"
+        "Send the PDF you want to compress.",
+        reply_markup=compress_cancel_keyboard()
+    )
+
+    context.user_data["compress_prompt_message_id"] = message.message_id
+
+    return COMPRESS_WAIT_FILE
+
+
+async def compress_receive_file(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    document = update.effective_message.document
+
+    if not document:
+        return COMPRESS_WAIT_FILE
+
+    if document.mime_type != "application/pdf":
+        await update.effective_message.reply_text(
+            "❌ Please send a PDF file."
+        )
+        return COMPRESS_WAIT_FILE
+
+    temp_dir = tempfile.mkdtemp()
+
+    try:
+        input_path = os.path.join(temp_dir, "input.pdf")
+
+        file = await document.get_file()
+        await file.download_to_drive(input_path)
+
+        context.user_data["compress_dir"] = temp_dir
+        context.user_data["compress_input"] = input_path
+
+        prompt_message_id = context.user_data.get(
+            "compress_prompt_message_id"
+        )
+
+        if prompt_message_id:
+            try:
+                await context.bot.edit_message_reply_markup(
+                    chat_id=update.effective_chat.id,
+                    message_id=prompt_message_id,
+                    reply_markup=None
+                )
+            except Exception:
+                pass
+
+        prompt = await update.effective_message.reply_text(
+            "✅ File received.\n\n"
+            "📉 Choose compression level:\n\n"
+            "🟢 Low — best quality\n"
+            "🟡 Medium — balanced\n"
+            "🔴 High — smallest file",
+            reply_markup=compress_level_keyboard()
+        )
+
+        context.user_data["compress_prompt_message_id"] = prompt.message_id
+
+        return COMPRESS_WAIT_LEVEL
+
+    except Exception as e:
+        logger.error(f"Compression file receive error: {e}")
+
+        try:
+            for filename in os.listdir(temp_dir):
+                os.remove(os.path.join(temp_dir, filename))
+            os.rmdir(temp_dir)
+        except Exception:
+            pass
+
+        await update.effective_message.reply_text(
+            "❌ I couldn't receive the PDF."
+        )
+
+        return COMPRESS_WAIT_FILE
+
+
+async def compress_level_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    await query.answer()
+
+    levels = {
+        "compress_low": ("/printer", "Low"),
+        "compress_medium": ("/ebook", "Medium"),
+        "compress_high": ("/screen", "High"),
+    }
+
+    setting = levels.get(query.data)
+
+    if not setting:
+        return COMPRESS_WAIT_LEVEL
+
+    pdf_setting, level_name = setting
+
+    input_path = context.user_data.get("compress_input")
+    temp_dir = context.user_data.get("compress_dir")
+
+    if not input_path or not temp_dir:
+        await query.message.edit_text(
+            "❌ The PDF could not be found.",
+            reply_markup=main_menu_button()
+        )
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    try:
+        await query.message.edit_text(
+            f"⏳ Compressing your PDF...\n\n"
+            f"📉 Level: {level_name}\n"
+            f"Please wait."
+        )
+
+        output_path = os.path.join(
+            temp_dir,
+            "compressed.pdf"
+        )
+
+        command = [
+            "gs",
+            "-sDEVICE=pdfwrite",
+            "-dCompatibilityLevel=1.4",
+            "-dPDFSETTINGS=" + pdf_setting,
+            "-dNOPAUSE",
+            "-dQUIET",
+            "-dBATCH",
+            "-sOutputFile=" + output_path,
+            input_path
+        ]
+
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+
+        stdout, stderr = await process.communicate()
+
+        if process.returncode != 0 or not os.path.exists(output_path):
+            logger.error(
+                f"Ghostscript error: "
+                f"{stderr.decode(errors='ignore')}"
+            )
+
+            await query.message.edit_text(
+                "❌ Unable to compress this PDF.",
+                reply_markup=main_menu_button()
+            )
+
+            return ConversationHandler.END
+
+        original_size = os.path.getsize(input_path)
+        compressed_size = os.path.getsize(output_path)
+
+        if original_size > 0:
+            saved_percent = (
+                (original_size - compressed_size)
+                / original_size
+            ) * 100
+        else:
+            saved_percent = 0
+
+        def format_size(size):
+            if size >= 1024 * 1024:
+                return f"{size / (1024 * 1024):.2f} MB"
+            return f"{size / 1024:.1f} KB"
+
+        # If compression made the file larger, return the original.
+        final_path = output_path
+        final_size = compressed_size
+
+        if compressed_size >= original_size:
+            final_path = input_path
+            final_size = original_size
+            saved_percent = 0
+
+        await query.message.edit_text(
+            "📤 Sending your compressed PDF..."
+        )
+
+        with open(final_path, "rb") as pdf_file:
+            await query.message.reply_document(
+                document=pdf_file,
+                filename="compressed.pdf",
+                caption=(
+                    "✅ Compression complete!\n\n"
+                    f"📦 Original: {format_size(original_size)}\n"
+                    f"📉 Compressed: {format_size(final_size)}\n"
+                    f"💾 Saved: {saved_percent:.1f}%\n"
+                    f"⚙️ Level: {level_name}"
+                ),
+                reply_markup=main_menu_button()
+            )
+
+    except Exception as e:
+        logger.error(f"PDF compression error: {e}")
+
+        await query.message.edit_text(
+            "❌ An error occurred while compressing the PDF.",
+            reply_markup=main_menu_button()
+        )
+
+    finally:
+        try:
+            if temp_dir and os.path.exists(temp_dir):
+                for filename in os.listdir(temp_dir):
+                    file_path = os.path.join(temp_dir, filename)
+
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+
+                os.rmdir(temp_dir)
+        except Exception:
+            pass
+
+        context.user_data.clear()
+
+    return ConversationHandler.END
+
+
+async def compress_cancel(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    await query.answer()
+
+    temp_dir = context.user_data.get("compress_dir")
+
+    if temp_dir and os.path.exists(temp_dir):
+        try:
+            for filename in os.listdir(temp_dir):
+                file_path = os.path.join(temp_dir, filename)
+
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+
+            os.rmdir(temp_dir)
+        except Exception as e:
+            logger.warning(
+                f"Compression cancel cleanup error: {e}"
+            )
+
+    context.user_data.clear()
+
+    await query.message.edit_text(
+        "🏠 NovaPDF AI\n\nChoose a tool:",
+        reply_markup=main_keyboard()
+    )
+
+    return ConversationHandler.END
+
+
 # =========================
 # COMING SOON FEATURES
 # =========================
@@ -3199,6 +3492,61 @@ def main():
     )
 
     app.add_handler(images_handler)
+
+    # Compress PDF
+    compress_handler = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(
+                compress_start,
+                pattern="^compress$"
+            ),
+            MessageHandler(
+                filters.Regex("^📉 Compress PDF$"),
+                compress_start
+            )
+        ],
+
+        states={
+            COMPRESS_WAIT_FILE: [
+                MessageHandler(
+                    filters.Document.PDF,
+                    compress_receive_file
+                ),
+                CallbackQueryHandler(
+                    compress_cancel,
+                    pattern="^compress_cancel$"
+                )
+            ],
+
+            COMPRESS_WAIT_LEVEL: [
+                CallbackQueryHandler(
+                    compress_level_callback,
+                    pattern="^compress_(low|medium|high)$"
+                ),
+                CallbackQueryHandler(
+                    compress_cancel,
+                    pattern="^compress_cancel$"
+                )
+            ]
+        },
+
+        fallbacks=[
+            CallbackQueryHandler(
+                compress_cancel,
+                pattern="^compress_cancel$"
+            ),
+            CallbackQueryHandler(
+                inline_back_handler,
+                pattern="^back$"
+            ),
+            CommandHandler(
+                "cancel",
+                cancel
+            )
+        ]
+    )
+
+    app.add_handler(compress_handler)
 
     # Text to PDF
     text_to_pdf_handler = ConversationHandler(
