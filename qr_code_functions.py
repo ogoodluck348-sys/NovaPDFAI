@@ -2,6 +2,7 @@ import os
 import tempfile
 import shutil
 import qrcode
+from PIL import Image
 from qrcode.image.styledpil import StyledPilImage
 from qrcode.image.styles.moduledrawers import (
     SquareModuleDrawer,
