@@ -58,7 +58,7 @@ async def unlock_receive_file(update, context):
 
     if not document or not document.file_name.lower().endswith(".pdf"):
         await update.message.reply_text(
-            "❌ Please send a PDF file.",
+            "❌ Invalid file.\nPlease send a PDF file.",
             reply_markup=unlock_cancel_keyboard()
         )
         return UNLOCK_WAIT_FILE

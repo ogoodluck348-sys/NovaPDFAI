@@ -366,6 +366,22 @@ async def back_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+async def send_invalid_file(
+    update: Update,
+    message_text: str,
+    cancel_callback: str
+):
+    await update.effective_message.reply_text(
+        message_text,
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton(
+                "❌ Cancel",
+                callback_data=cancel_callback
+            )]
+        ])
+    )
+
+
 # =========================
 # PROTECT PDF
 # =========================
@@ -426,8 +442,10 @@ async def protect_receive_pdf(
         return PROTECT_WAIT_PDF
 
     if document.mime_type != "application/pdf":
-        await update.effective_message.reply_text(
-            "❌ Please send a PDF file."
+        await send_invalid_file(
+            update,
+            "❌ Invalid file.\nPlease send a PDF file.",
+            "protect_cancel"
         )
         return PROTECT_WAIT_PDF
 
@@ -649,8 +667,10 @@ async def merge_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return MERGE_WAIT_FILES
 
     if document.mime_type != "application/pdf":
-        await update.effective_message.reply_text(
-            "❌ Please send PDF files only."
+        await send_invalid_file(
+            update,
+            "❌ Invalid file.\nPlease send a PDF file.",
+            "merge_cancel"
         )
         return MERGE_WAIT_FILES
 
@@ -1121,8 +1141,10 @@ async def extract_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return EXTRACT_WAIT_PDF
 
     if document.mime_type != "application/pdf":
-        await update.effective_message.reply_text(
-            "❌ Please send a PDF file."
+        await send_invalid_file(
+            update,
+            "❌ Invalid file.\nPlease send a PDF file.",
+            "extract_cancel"
         )
         return EXTRACT_WAIT_PDF
 
@@ -1257,8 +1279,10 @@ async def summarize_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return SUMMARY_WAIT_PDF
 
     if document.mime_type != "application/pdf":
-        await update.effective_message.reply_text(
-            "❌ Please send a PDF file."
+        await send_invalid_file(
+            update,
+            "❌ Invalid file.\nPlease send a PDF file.",
+            "summarize_cancel"
         )
         return SUMMARY_WAIT_PDF
 
@@ -2165,8 +2189,10 @@ async def rotate_receive_file(
         return ROTATE_WAIT_FILE
 
     if document.mime_type != "application/pdf":
-        await update.effective_message.reply_text(
-            "❌ Please send a PDF file."
+        await send_invalid_file(
+            update,
+            "❌ Invalid file.\nPlease send a PDF file.",
+            "rotate_cancel"
         )
         return ROTATE_WAIT_FILE
 
@@ -2473,8 +2499,10 @@ async def images_receive_file(
         return IMAGES_WAIT_FILE
 
     if document.mime_type != "application/pdf":
-        await update.effective_message.reply_text(
-            "❌ Please send a PDF file."
+        await send_invalid_file(
+            update,
+            "❌ Invalid file.\nPlease send a PDF file.",
+            "images_cancel"
         )
         return IMAGES_WAIT_FILE
 
@@ -2788,8 +2816,10 @@ async def compress_receive_file(
         return COMPRESS_WAIT_FILE
 
     if document.mime_type != "application/pdf":
-        await update.effective_message.reply_text(
-            "❌ Please send a PDF file."
+        await send_invalid_file(
+            update,
+            "❌ Invalid file.\nPlease send a PDF file.",
+            "compress_cancel"
         )
         return COMPRESS_WAIT_FILE
 
@@ -3248,6 +3278,20 @@ async def coming_soon_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
     await coming_soon(update, context)
 
+async def summarize_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    context.user_data.clear()
+
+    await query.message.edit_text(
+        "🏠 NovaPDF AI\n\nChoose a tool:",
+        reply_markup=main_keyboard()
+    )
+
+    return ConversationHandler.END
+
+
 # =========================
 # MAIN APPLICATION
 # =========================
@@ -3328,7 +3372,7 @@ def main():
         states={
             UNLOCK_WAIT_FILE: [
                 MessageHandler(
-                    filters.Document.PDF,
+                    filters.Document.ALL,
                     unlock_receive_file
                 ),
                 CallbackQueryHandler(
@@ -3491,13 +3535,18 @@ def main():
         states={
             EXTRACT_WAIT_PDF: [
                 MessageHandler(
-                    filters.Document.PDF,
+                    filters.Document.ALL,
                     extract_receive
+                ),
+                CallbackQueryHandler(
+                    extract_cancel,
+                    pattern="^extract_cancel$"
                 )
             ]
         },
         fallbacks=[
             CallbackQueryHandler(extract_back, pattern="^extract_back$"),
+            CallbackQueryHandler(extract_cancel, pattern="^extract_cancel$"),
             CommandHandler("cancel", cancel)
         ],
     )
@@ -3514,8 +3563,12 @@ def main():
         states={
             SUMMARY_WAIT_PDF: [
                 MessageHandler(
-                    filters.Document.PDF,
+                    filters.Document.ALL,
                     summarize_receive
+                ),
+                CallbackQueryHandler(
+                    summarize_cancel,
+                    pattern="^summarize_cancel$"
                 )
             ]
         },
@@ -3627,7 +3680,7 @@ def main():
         states={
             ROTATE_WAIT_FILE: [
                 MessageHandler(
-                    filters.Document.PDF,
+                    filters.Document.ALL,
                     rotate_receive_file
                 ),
                 CallbackQueryHandler(
@@ -3693,7 +3746,7 @@ def main():
         states={
             IMAGES_WAIT_FILE: [
                 MessageHandler(
-                    filters.Document.PDF,
+                    filters.Document.ALL,
                     images_receive_file
                 ),
                 CallbackQueryHandler(
@@ -3807,7 +3860,7 @@ def main():
         states={
             COMPRESS_WAIT_FILE: [
                 MessageHandler(
-                    filters.Document.PDF,
+                    filters.Document.ALL,
                     compress_receive_file
                 ),
                 CallbackQueryHandler(
