@@ -17,7 +17,39 @@ def unlock_cancel_keyboard():
     ])
 
 
+def unlock_main_menu_keyboard():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🔗 Merge PDF", callback_data="merge"),
+            InlineKeyboardButton("🔒 Protect PDF", callback_data="protect")
+        ],
+        [
+            InlineKeyboardButton("📄 Extract PDF Text", callback_data="extract"),
+            InlineKeyboardButton("📝 Summarize PDF", callback_data="summarize")
+        ],
+        [
+            InlineKeyboardButton("💧 Watermark", callback_data="watermark"),
+            InlineKeyboardButton("🔄 Rotate PDF", callback_data="rotate")
+        ],
+        [
+            InlineKeyboardButton("🖼️ PDF to Images", callback_data="images"),
+            InlineKeyboardButton("📉 Compress PDF", callback_data="compress")
+        ],
+        [
+            InlineKeyboardButton("🖼️ Images → PDF", callback_data="images_to_pdf"),
+            InlineKeyboardButton("🔓 Unlock PDF", callback_data="unlock")
+        ],
+        [
+            InlineKeyboardButton("📝 Text to PDF", callback_data="texttopdf"),
+            InlineKeyboardButton("➕ More", callback_data="more")
+        ]
+    ])
+
+
 async def unlock_start(update, context):
+    if update.callback_query:
+        await update.callback_query.answer()
+
     message = update.effective_message
 
     context.user_data.pop("unlock_pdf_file", None)
@@ -178,7 +210,8 @@ async def unlock_receive_name(update, context):
         await update.message.reply_document(
             document=final_path,
             filename=f"{safe_name}.pdf",
-            caption="🔓 PDF unlocked successfully!"
+            caption="🔓 PDF unlocked successfully!",
+            reply_markup=unlock_main_menu_keyboard()
         )
 
         shutil.rmtree(
