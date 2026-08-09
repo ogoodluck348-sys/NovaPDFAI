@@ -3539,6 +3539,8 @@ def main():
                     extract_receive
                 ),
                 CallbackQueryHandler(
+                    extract_back,
+                    pattern="^extract_back$"
                 )
             ]
         },
