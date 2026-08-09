@@ -225,6 +225,27 @@ def main_menu_button():
     ])
 
 
+async def remove_prompt_cancel_button(update, context, key):
+    """Remove the Cancel button from a previous prompt message."""
+    message_id = context.user_data.get(key)
+
+    if not message_id:
+        return
+
+    try:
+        await context.bot.edit_message_reply_markup(
+            chat_id=update.effective_chat.id,
+            message_id=message_id,
+            reply_markup=None
+        )
+    except Exception as e:
+        logger.warning(
+            f"Could not remove Cancel button from prompt {message_id}: {e}"
+        )
+
+    context.user_data.pop(key, None)
+
+
 
 # =========================
 # MORE MENU
@@ -399,7 +420,10 @@ async def protect_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
 
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("⬅️ Back", callback_data="protect_back")]
+        [InlineKeyboardButton(
+            "❌ Cancel",
+            callback_data="protect_cancel"
+        )]
     ])
 
     if query:
@@ -530,6 +554,10 @@ async def protect_receive_password(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    await remove_prompt_cancel_button(
+        update, context, "protect_password_message_id"
+    )
+
     password = update.effective_message.text.strip()
 
     if not password:
@@ -549,11 +577,19 @@ async def protect_receive_password(
 
     context.user_data["protect_password"] = password
 
-    await update.effective_message.reply_text(
+    name_message = await update.effective_message.reply_text(
         "🔐 Password saved.\n\n"
         "📝 Now enter the name you want for the protected PDF "
-        "(without .pdf)."
+        "(without .pdf).",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton(
+                "❌ Cancel",
+                callback_data="protect_cancel"
+            )]
+        ])
     )
+
+    context.user_data["protect_name_message_id"] = name_message.message_id
 
     return PROTECT_WAIT_NAME
 
@@ -561,6 +597,10 @@ async def protect_receive_name(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    await remove_prompt_cancel_button(
+        update, context, "protect_name_message_id"
+    )
+
     name = update.effective_message.text.strip()
 
     if not name:
@@ -648,20 +688,42 @@ async def merge_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.edit_text(
             "🔗 Send the PDF files you want to merge.\n\n"
             "Send them one after another.",
-            reply_markup=back_keyboard()
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton(
+                    "❌ Cancel",
+                    callback_data="merge_cancel"
+                )]
+            ])
         )
+
+        context.user_data["merge_prompt_message_id"] = (
+            query.message.message_id
+        )
+
     else:
         message = await update.effective_message.reply_text(
             "🔗 Send the PDF files you want to merge.\n\n"
             "Send them one after another.",
-            reply_markup=back_keyboard()
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton(
+                    "❌ Cancel",
+                    callback_data="merge_cancel"
+                )]
+            ])
         )
-        context.user_data["prompt_message_id"] = message.message_id
+
+        context.user_data["merge_prompt_message_id"] = (
+            message.message_id
+        )
 
     return MERGE_WAIT_FILES
 
 
 async def merge_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await remove_prompt_cancel_button(
+        update, context, "merge_prompt_message_id"
+    )
+
     document = update.effective_message.document
 
     if not document:
@@ -697,13 +759,15 @@ async def merge_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
         files.append(input_path)
         context.user_data["merge_files"] = files
 
-        await update.effective_message.reply_text(
+        prompt = await update.effective_message.reply_text(
             f"✅ PDF {number} received.\n\n"
             "📄 Send another PDF or type /done when you're finished.",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("❌ Cancel", callback_data="merge_cancel")]
             ])
         )
+
+        context.user_data["merge_prompt_message_id"] = prompt.message_id
 
         return MERGE_WAIT_FILES
 
@@ -775,6 +839,10 @@ async def merge_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def merge_receive_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await remove_prompt_cancel_button(
+        update, context, "merge_name_message_id"
+    )
+
     name = update.effective_message.text.strip()
 
     if not name:
@@ -1411,7 +1479,10 @@ async def extract_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
 
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("⬅️ Back", callback_data="extract_back")]
+        [InlineKeyboardButton(
+            "❌ Cancel",
+            callback_data="extract_back"
+        )]
     ])
 
     if query:
@@ -1446,6 +1517,10 @@ async def extract_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def extract_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await remove_prompt_cancel_button(
+        update, context, "extract_prompt_message_id"
+    )
+
     document = update.effective_message.document
 
     if not document:
@@ -1584,6 +1659,10 @@ async def summary_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def summarize_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await remove_prompt_cancel_button(
+        update, context, "summary_prompt_message_id"
+    )
+
     document = update.effective_message.document
 
     if not document:
@@ -1601,17 +1680,6 @@ async def summarize_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
     input_path = os.path.join(temp_dir, "input.pdf")
 
     try:
-        prompt_message_id = context.user_data.get("summary_prompt_message_id")
-
-        if prompt_message_id:
-            try:
-                await context.bot.delete_message(
-                    chat_id=update.effective_chat.id,
-                    message_id=prompt_message_id
-                )
-            except Exception as e:
-                logger.warning(f"Could not delete Summarize prompt: {e}")
-
         await update.effective_message.reply_text(
             "⏳ Processing your PDF...\n\n"
             "🤖 Nova AI is preparing your summary."
@@ -1866,6 +1934,10 @@ async def watermark_receive_file(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    await remove_prompt_cancel_button(
+        update, context, "watermark_prompt_message_id"
+    )
+
     document = update.effective_message.document
     photo = update.effective_message.photo
 
@@ -1968,6 +2040,10 @@ async def watermark_receive_text(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    await remove_prompt_cancel_button(
+        update, context, "watermark_prompt_message_id"
+    )
+
     text = update.effective_message.text.strip()
 
     if not text:
@@ -2007,6 +2083,10 @@ async def watermark_receive_name(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    await remove_prompt_cancel_button(
+        update, context, "watermark_prompt_message_id"
+    )
+
     name = update.effective_message.text.strip()
 
     if not name:
@@ -2494,6 +2574,10 @@ async def rotate_receive_file(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    await remove_prompt_cancel_button(
+        update, context, "rotate_prompt_message_id"
+    )
+
     document = update.effective_message.document
 
     if not document:
@@ -2599,6 +2683,10 @@ async def rotate_receive_name(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    await remove_prompt_cancel_button(
+        update, context, "rotate_prompt_message_id"
+    )
+
     name = update.effective_message.text.strip()
 
     if not name:
@@ -2804,6 +2892,10 @@ async def images_receive_file(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    await remove_prompt_cancel_button(
+        update, context, "images_prompt_message_id"
+    )
+
     document = update.effective_message.document
 
     if not document:
@@ -3121,6 +3213,10 @@ async def compress_receive_file(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    await remove_prompt_cancel_button(
+        update, context, "compress_prompt_message_id"
+    )
+
     document = update.effective_message.document
 
     if not document:
@@ -3191,6 +3287,10 @@ async def compress_receive_name(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    await remove_prompt_cancel_button(
+        update, context, "compress_prompt_message_id"
+    )
+
     name = update.effective_message.text.strip()
 
     if not name:
