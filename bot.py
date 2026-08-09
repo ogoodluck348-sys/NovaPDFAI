@@ -833,9 +833,7 @@ async def text_to_pdf_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sent = await update.effective_message.reply_text(
         "📝 Send the text you want to convert to PDF.\n\n"
         "You can send a short or long text.",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("❌ Cancel", callback_data="texttopdf_cancel")]
-        ])
+        reply_markup=back_keyboard()
     )
 
     context.user_data["text_to_pdf_bot_messages"].append(sent.message_id)
@@ -858,11 +856,18 @@ async def text_to_pdf_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     context.user_data["pdf_text"] = text
 
-    await update.effective_message.reply_text(
+    sent = await update.effective_message.reply_text(
         "📄 What would you like to name your PDF?\n\n"
         "Example: Biology Notes\n\n"
-        "You don't need to type .pdf"
+        "You don't need to type .pdf",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("❌ Cancel", callback_data="texttopdf_cancel")]
+        ])
     )
+
+    context.user_data.setdefault(
+        "text_to_pdf_bot_messages", []
+    ).append(sent.message_id)
 
     return TEXT_TO_PDF_WAIT_NAME
 
