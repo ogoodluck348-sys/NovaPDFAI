@@ -245,7 +245,7 @@ async def images_to_pdf_cancel(update, context):
     context.user_data.pop("images_to_pdf_dir", None)
 
     await query.message.edit_text(
-        "🏠 NovaPDF AI\\n\\nChoose a tool:",
+        "🏠 NovaPDF AI\n\nChoose a tool:",
         reply_markup=InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("🔗 Merge PDF", callback_data="merge"),
