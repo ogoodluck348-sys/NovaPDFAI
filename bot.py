@@ -3501,7 +3501,7 @@ def main():
         states={
             MERGE_WAIT_FILES: [
                 MessageHandler(
-                    filters.Document.PDF,
+                    filters.Document.ALL,
                     merge_receive
                 ),
                 CommandHandler("done", merge_done),
