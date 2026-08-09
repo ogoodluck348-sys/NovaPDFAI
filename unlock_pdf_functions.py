@@ -47,22 +47,26 @@ def unlock_main_menu_keyboard():
 
 
 async def unlock_start(update, context):
-    if update.callback_query:
-        await update.callback_query.answer()
+    query = update.callback_query
 
-    message = update.effective_message
+    if query:
+        await query.answer()
+        message = query.message
+    else:
+        message = update.effective_message
 
     context.user_data.pop("unlock_pdf_file", None)
     context.user_data.pop("unlock_pdf_path", None)
     context.user_data.pop("unlock_pdf_password", None)
     context.user_data.pop("unlock_pdf_filename", None)
 
-    await message.reply_text(
-        "🔓 <b>Unlock PDF</b>\n\n"
+    await message.edit_text(
+        "🔓 Unlock PDF\n\n"
         "Send the password-protected PDF you want to unlock.",
-        parse_mode="HTML",
         reply_markup=unlock_cancel_keyboard()
     )
+
+    context.user_data["unlock_prompt_message_id"] = message.message_id
 
     return UNLOCK_WAIT_FILE
 
@@ -214,45 +218,15 @@ async def unlock_receive_name(update, context):
             reply_markup=unlock_main_menu_keyboard()
         )
 
-        shutil.rmtree(
-            context.user_data.get("unlock_pdf_path", ""),
-            ignore_errors=True
-        )
+        temp_dir = context.user_data.get("unlock_pdf_path")
+
+        if temp_dir:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
         context.user_data.pop("unlock_pdf_file", None)
         context.user_data.pop("unlock_pdf_path", None)
         context.user_data.pop("unlock_pdf_password", None)
         context.user_data.pop("unlock_pdf_filename", None)
-
-        await update.message.reply_text(
-            "🏠 NovaPDF AI\n\nChoose a tool:",
-            reply_markup=InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton("🔗 Merge PDF", callback_data="merge"),
-                    InlineKeyboardButton("🔒 Protect PDF", callback_data="protect")
-                ],
-                [
-                    InlineKeyboardButton("📄 Extract PDF Text", callback_data="extract"),
-                    InlineKeyboardButton("📝 Summarize PDF", callback_data="summarize")
-                ],
-                [
-                    InlineKeyboardButton("💧 Watermark", callback_data="watermark"),
-                    InlineKeyboardButton("🔄 Rotate PDF", callback_data="rotate")
-                ],
-                [
-                    InlineKeyboardButton("🖼️ PDF to Images", callback_data="images"),
-                    InlineKeyboardButton("📉 Compress PDF", callback_data="compress")
-                ],
-                [
-                    InlineKeyboardButton("🖼️ Images → PDF", callback_data="images_to_pdf"),
-                    InlineKeyboardButton("🔓 Unlock PDF", callback_data="unlock")
-                ],
-                [
-                    InlineKeyboardButton("📝 Text to PDF", callback_data="texttopdf"),
-                    InlineKeyboardButton("➕ More", callback_data="more")
-                ]
-            ])
-        )
 
         return ConversationHandler.END
 
@@ -270,42 +244,14 @@ async def unlock_cancel(update, context):
 
     temp_dir = context.user_data.get("unlock_pdf_path")
 
-    if temp_dir:
+    if temp_dir and os.path.exists(temp_dir):
         shutil.rmtree(temp_dir, ignore_errors=True)
 
-    context.user_data.pop("unlock_pdf_file", None)
-    context.user_data.pop("unlock_pdf_path", None)
-    context.user_data.pop("unlock_pdf_password", None)
-    context.user_data.pop("unlock_pdf_filename", None)
+    context.user_data.clear()
 
     await query.message.edit_text(
         "🏠 NovaPDF AI\n\nChoose a tool:",
-        reply_markup=InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton("🔗 Merge PDF", callback_data="merge"),
-                InlineKeyboardButton("🔒 Protect PDF", callback_data="protect")
-            ],
-            [
-                InlineKeyboardButton("📄 Extract PDF Text", callback_data="extract"),
-                InlineKeyboardButton("📝 Summarize PDF", callback_data="summarize")
-            ],
-            [
-                InlineKeyboardButton("💧 Watermark", callback_data="watermark"),
-                InlineKeyboardButton("🔄 Rotate PDF", callback_data="rotate")
-            ],
-            [
-                InlineKeyboardButton("🖼️ PDF to Images", callback_data="images"),
-                InlineKeyboardButton("📉 Compress PDF", callback_data="compress")
-            ],
-            [
-                InlineKeyboardButton("🖼️ Images → PDF", callback_data="images_to_pdf"),
-                InlineKeyboardButton("🔓 Unlock PDF", callback_data="unlock")
-            ],
-            [
-                InlineKeyboardButton("📝 Text to PDF", callback_data="texttopdf"),
-                InlineKeyboardButton("➕ More", callback_data="more")
-            ]
-        ])
+        reply_markup=unlock_main_menu_keyboard()
     )
 
     return ConversationHandler.END
