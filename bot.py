@@ -3515,8 +3515,14 @@ async def inline_main_menu_handler(update: Update, context: ContextTypes.DEFAULT
     # Clear any active operation
     context.user_data.clear()
 
-    # Always SEND a new menu.
-    # This works for PDF/document messages, images and normal text messages.
+    # Remove the Main Menu button from the result message
+    # after it has been tapped.
+    try:
+        await query.message.edit_reply_markup(reply_markup=None)
+    except Exception as e:
+        logger.warning(f"Could not remove Main Menu button: {e}")
+
+    # Send the full Main Menu as a new message.
     await query.message.reply_text(
         "🏠 NovaPDF AI\n\nChoose a tool:",
         reply_markup=main_keyboard()
