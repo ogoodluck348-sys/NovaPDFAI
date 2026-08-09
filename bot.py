@@ -62,6 +62,7 @@ logger = logging.getLogger(__name__)
 
 PROTECT_WAIT_PDF = 1
 PROTECT_WAIT_PASSWORD = 2
+PROTECT_WAIT_NAME = 27
 MERGE_WAIT_FILES = 3
 EXTRACT_WAIT_PDF = 4
 SUMMARY_WAIT_PDF = 5
@@ -146,9 +147,7 @@ def main_keyboard():
             InlineKeyboardButton("🔓 Unlock PDF", callback_data="unlock")
         ],
         [
-            InlineKeyboardButton("📝 Text to PDF", callback_data="texttopdf")
-        ],
-        [
+            InlineKeyboardButton("📝 Text to PDF", callback_data="texttopdf"),
             InlineKeyboardButton("📱 QR Code Generator", callback_data="qr_code")
         ],
         [
@@ -529,10 +528,44 @@ async def protect_receive_password(
         )
         return ConversationHandler.END
 
-    output_path = os.path.join(
-        temp_dir,
-        "protected.pdf"
+    context.user_data["protect_password"] = password
+
+    await update.effective_message.reply_text(
+        "🔐 Password saved.\n\n"
+        "📝 Now enter the name you want for the protected PDF "
+        "(without .pdf)."
     )
+
+    return PROTECT_WAIT_NAME
+
+async def protect_receive_name(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    name = update.effective_message.text.strip()
+
+    if not name:
+        await update.effective_message.reply_text(
+            "❌ Please enter a valid file name."
+        )
+        return PROTECT_WAIT_NAME
+
+    name = name.replace("/", "_").replace("\\", "_")
+
+    if not name.lower().endswith(".pdf"):
+        name += ".pdf"
+
+    input_path = context.user_data.get("protect_input")
+    temp_dir = context.user_data.get("protect_dir")
+    password = context.user_data.get("protect_password")
+
+    if not input_path or not temp_dir or not password:
+        await update.effective_message.reply_text(
+            "❌ Protection session expired. Please start again."
+        )
+        return ConversationHandler.END
+
+    output_path = os.path.join(temp_dir, name)
 
     try:
         await update.effective_message.reply_text(
@@ -553,6 +586,7 @@ async def protect_receive_password(
         with open(output_path, "rb") as pdf_file:
             await update.effective_message.reply_document(
                 document=pdf_file,
+                filename=name,
                 caption="🔐 Your PDF has been password-protected.",
                 reply_markup=main_menu_button()
             )
@@ -3263,6 +3297,16 @@ def main():
                 MessageHandler(
                     filters.TEXT & ~filters.COMMAND,
                     protect_receive_password
+                ),
+                CallbackQueryHandler(
+                    protect_cancel,
+                    pattern="^protect_cancel$"
+                )
+            ],
+            PROTECT_WAIT_NAME: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    protect_receive_name
                 ),
                 CallbackQueryHandler(
                     protect_cancel,
