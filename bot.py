@@ -67,6 +67,8 @@ TEXT_TO_PDF_WAIT_NAME = 7
 MERGE_WAIT_NAME = 8
 WATERMARK_WAIT_FILE = 9
 WATERMARK_WAIT_TEXT = 10
+WATERMARK_WAIT_NAME = 11
+WATERMARK_WAIT_COLOR = 12
 
 
 # =========================
@@ -1392,6 +1394,42 @@ DOCUMENT:
 # WATERMARK
 # =========================
 
+def watermark_cancel_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Cancel", callback_data="watermark_cancel")]
+    ])
+
+
+def watermark_color_keyboard():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("⚫ Black", callback_data="wm_color_black"),
+            InlineKeyboardButton("⚪ White", callback_data="wm_color_white")
+        ],
+        [
+            InlineKeyboardButton("🔴 Red", callback_data="wm_color_red"),
+            InlineKeyboardButton("🔵 Blue", callback_data="wm_color_blue")
+        ],
+        [
+            InlineKeyboardButton("🟢 Green", callback_data="wm_color_green"),
+            InlineKeyboardButton("🟡 Yellow", callback_data="wm_color_yellow")
+        ],
+        [
+            InlineKeyboardButton("❌ Cancel", callback_data="watermark_cancel")
+        ]
+    ])
+
+
+WATERMARK_COLORS = {
+    "black": (0, 0, 0),
+    "white": (255, 255, 255),
+    "red": (220, 0, 0),
+    "blue": (0, 80, 220),
+    "green": (0, 150, 70),
+    "yellow": (220, 180, 0),
+}
+
+
 async def watermark_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
 
@@ -1403,21 +1441,39 @@ async def watermark_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data.clear()
 
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ Cancel", callback_data="watermark_cancel")]
-    ])
-
     await message.edit_text(
         "💧 Watermark\n\n"
         "Send the PDF or image you want to watermark.\n\n"
         "Supported: PDF, JPG, JPEG, PNG",
-        reply_markup=keyboard
+        reply_markup=watermark_cancel_keyboard()
     )
+
+    context.user_data["watermark_prompt_message_id"] = message.message_id
 
     return WATERMARK_WAIT_FILE
 
 
-async def watermark_receive_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def remove_watermark_cancel_button(
+    context: ContextTypes.DEFAULT_TYPE,
+    chat_id: int,
+    message_id: int
+):
+    try:
+        await context.bot.edit_message_reply_markup(
+            chat_id=chat_id,
+            message_id=message_id,
+            reply_markup=None
+        )
+    except Exception as e:
+        logger.warning(
+            f"Could not remove watermark Cancel button: {e}"
+        )
+
+
+async def watermark_receive_file(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     document = update.effective_message.document
     photo = update.effective_message.photo
 
@@ -1427,6 +1483,17 @@ async def watermark_receive_file(update: Update, context: ContextTypes.DEFAULT_T
         )
         return WATERMARK_WAIT_FILE
 
+    prompt_message_id = context.user_data.get(
+        "watermark_prompt_message_id"
+    )
+
+    if prompt_message_id:
+        await remove_watermark_cancel_button(
+            context,
+            update.effective_chat.id,
+            prompt_message_id
+        )
+
     temp_dir = tempfile.mkdtemp()
 
     try:
@@ -1435,22 +1502,37 @@ async def watermark_receive_file(update: Update, context: ContextTypes.DEFAULT_T
 
             if document.mime_type == "application/pdf":
                 extension = ".pdf"
-            elif document.mime_type and document.mime_type.startswith("image/"):
-                extension = os.path.splitext(filename)[1].lower() or ".jpg"
+
+            elif (
+                document.mime_type
+                and document.mime_type.startswith("image/")
+            ):
+                extension = (
+                    os.path.splitext(filename)[1].lower()
+                    or ".jpg"
+                )
+
             else:
                 await update.effective_message.reply_text(
                     "❌ Please send a PDF or JPG/PNG image."
                 )
+
                 os.rmdir(temp_dir)
                 return WATERMARK_WAIT_FILE
 
-            input_path = os.path.join(temp_dir, "input" + extension)
+            input_path = os.path.join(
+                temp_dir,
+                "input" + extension
+            )
 
             file = await document.get_file()
             await file.download_to_drive(input_path)
 
         else:
-            input_path = os.path.join(temp_dir, "input.jpg")
+            input_path = os.path.join(
+                temp_dir,
+                "input.jpg"
+            )
 
             file = await photo[-1].get_file()
             await file.download_to_drive(input_path)
@@ -1458,23 +1540,27 @@ async def watermark_receive_file(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data["watermark_dir"] = temp_dir
         context.user_data["watermark_input"] = input_path
 
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("❌ Cancel", callback_data="watermark_cancel")]
-        ])
-
-        await update.effective_message.reply_text(
+        prompt = await update.effective_message.reply_text(
             "✅ File received.\n\n"
             "✏️ Now send the text you want to use as the watermark.\n\n"
-            "Example: GC Digital Hub",
-            reply_markup=keyboard
+            "Example: Confidential",
+            reply_markup=watermark_cancel_keyboard()
+        )
+
+        context.user_data["watermark_prompt_message_id"] = (
+            prompt.message_id
         )
 
         return WATERMARK_WAIT_TEXT
 
     except Exception as e:
-        logger.error(f"Watermark receive error: {e}")
+        logger.error(
+            f"Watermark receive error: {e}"
+        )
 
         try:
+            for filename in os.listdir(temp_dir):
+                os.remove(os.path.join(temp_dir, filename))
             os.rmdir(temp_dir)
         except Exception:
             pass
@@ -1486,19 +1572,143 @@ async def watermark_receive_file(update: Update, context: ContextTypes.DEFAULT_T
         return WATERMARK_WAIT_FILE
 
 
-def create_pdf_watermark(watermark_path, text, page_width, page_height):
-    c = canvas.Canvas(watermark_path, pagesize=(page_width, page_height))
+async def watermark_receive_text(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    text = update.effective_message.text.strip()
+
+    if not text:
+        await update.effective_message.reply_text(
+            "❌ Please send watermark text."
+        )
+        return WATERMARK_WAIT_TEXT
+
+    prompt_message_id = context.user_data.get(
+        "watermark_prompt_message_id"
+    )
+
+    if prompt_message_id:
+        await remove_watermark_cancel_button(
+            context,
+            update.effective_chat.id,
+            prompt_message_id
+        )
+
+    context.user_data["watermark_text"] = text
+
+    prompt = await update.effective_message.reply_text(
+        "📄 What would you like to name the watermarked file?\n\n"
+        "Example: My Document\n\n"
+        "You don't need to type .pdf or .jpg",
+        reply_markup=watermark_cancel_keyboard()
+    )
+
+    context.user_data["watermark_prompt_message_id"] = (
+        prompt.message_id
+    )
+
+    return WATERMARK_WAIT_NAME
+
+
+async def watermark_receive_name(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    name = update.effective_message.text.strip()
+
+    if not name:
+        await update.effective_message.reply_text(
+            "❌ Please enter a file name."
+        )
+        return WATERMARK_WAIT_NAME
+
+    prompt_message_id = context.user_data.get(
+        "watermark_prompt_message_id"
+    )
+
+    if prompt_message_id:
+        await remove_watermark_cancel_button(
+            context,
+            update.effective_chat.id,
+            prompt_message_id
+        )
+
+    name = os.path.splitext(name)[0]
+
+    safe_name = "".join(
+        c for c in name
+        if c.isalnum() or c in " -_()"
+    ).strip()
+
+    if not safe_name:
+        await update.effective_message.reply_text(
+            "❌ Please choose a valid file name.",
+            reply_markup=watermark_cancel_keyboard()
+        )
+        return WATERMARK_WAIT_NAME
+
+    context.user_data["watermark_name"] = safe_name
+
+    prompt = await update.effective_message.reply_text(
+        "🎨 Choose the watermark color:",
+        reply_markup=watermark_color_keyboard()
+    )
+
+    context.user_data["watermark_prompt_message_id"] = (
+        prompt.message_id
+    )
+
+    return WATERMARK_WAIT_COLOR
+
+
+async def create_pdf_watermark(
+    watermark_path,
+    text,
+    page_width,
+    page_height,
+    color
+):
+    c = canvas.Canvas(
+        watermark_path,
+        pagesize=(page_width, page_height)
+    )
 
     c.saveState()
 
-    # Light transparent gray watermark
-    c.setFillColor(Color(0.5, 0.5, 0.5, alpha=0.25))
-    c.setFont("Helvetica-Bold", 42)
+    r, g, b = color
 
-    c.translate(page_width / 2, page_height / 2)
+    c.setFillColor(
+        Color(
+            r / 255,
+            g / 255,
+            b / 255,
+            alpha=0.20
+        )
+    )
+
+    font_size = min(
+        max(page_width, page_height) * 0.07,
+        65
+    )
+
+    c.setFont(
+        "Helvetica-Bold",
+        font_size
+    )
+
+    c.translate(
+        page_width / 2,
+        page_height / 2
+    )
+
     c.rotate(45)
 
-    text_width = c.stringWidth(text, "Helvetica-Bold", 42)
+    text_width = c.stringWidth(
+        text,
+        "Helvetica-Bold",
+        font_size
+    )
 
     c.drawString(
         -text_width / 2,
@@ -1510,8 +1720,15 @@ def create_pdf_watermark(watermark_path, text, page_width, page_height):
     c.save()
 
 
-def watermark_image(input_path, output_path, text):
-    image = Image.open(input_path).convert("RGBA")
+def watermark_image(
+    input_path,
+    output_path,
+    text,
+    color
+):
+    image = Image.open(
+        input_path
+    ).convert("RGBA")
 
     overlay = Image.new(
         "RGBA",
@@ -1521,9 +1738,10 @@ def watermark_image(input_path, output_path, text):
 
     draw = ImageDraw.Draw(overlay)
 
+    # Large watermark for images
     font_size = max(
-        24,
-        min(image.size) // 12
+        48,
+        min(image.size) // 5
     )
 
     try:
@@ -1532,20 +1750,33 @@ def watermark_image(input_path, output_path, text):
             font_size
         )
     except Exception:
-        font = ImageFont.load_default()
+        try:
+            font = ImageFont.truetype(
+                "/system/fonts/Roboto-Regular.ttf",
+                font_size
+            )
+        except Exception:
+            font = ImageFont.load_default()
 
-    bbox = draw.textbbox((0, 0), text, font=font)
+    bbox = draw.textbbox(
+        (0, 0),
+        text,
+        font=font
+    )
+
     text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
 
     x = (image.width - text_width) // 2
     y = (image.height - text_height) // 2
 
+    r, g, b = color
+
     draw.text(
         (x, y),
         text,
         font=font,
-        fill=(128, 128, 128, 70)
+        fill=(r, g, b, 75)
     )
 
     result = Image.alpha_composite(
@@ -1559,21 +1790,30 @@ def watermark_image(input_path, output_path, text):
     )
 
 
-async def watermark_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.effective_message.text.strip()
+async def watermark_process(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    color
+):
+    input_path = context.user_data.get(
+        "watermark_input"
+    )
 
-    if not text:
+    temp_dir = context.user_data.get(
+        "watermark_dir"
+    )
+
+    text = context.user_data.get(
+        "watermark_text"
+    )
+
+    safe_name = context.user_data.get(
+        "watermark_name"
+    )
+
+    if not input_path or not temp_dir or not text or not safe_name:
         await update.effective_message.reply_text(
-            "❌ Please send watermark text."
-        )
-        return WATERMARK_WAIT_TEXT
-
-    input_path = context.user_data.get("watermark_input")
-    temp_dir = context.user_data.get("watermark_dir")
-
-    if not input_path or not temp_dir:
-        await update.effective_message.reply_text(
-            "❌ Your file could not be found. Please start again.",
+            "❌ Your watermark information could not be found.",
             reply_markup=main_menu_button()
         )
 
@@ -1582,75 +1822,111 @@ async def watermark_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         await update.effective_message.reply_text(
-            "⏳ Adding watermark...\n\nPlease wait."
+            "⏳ Adding watermark...\n\n"
+            "Please wait."
         )
 
-        extension = os.path.splitext(input_path)[1].lower()
+        extension = os.path.splitext(
+            input_path
+        )[1].lower()
 
         if extension == ".pdf":
+
             output_path = os.path.join(
                 temp_dir,
-                "watermarked.pdf"
+                safe_name + ".pdf"
             )
 
             reader = PdfReader(input_path)
             writer = PdfWriter()
 
-            for page in reader.pages:
-                width = float(page.mediabox.width)
-                height = float(page.mediabox.height)
+            for index, page in enumerate(reader.pages):
+
+                width = float(
+                    page.mediabox.width
+                )
+
+                height = float(
+                    page.mediabox.height
+                )
 
                 watermark_path = os.path.join(
                     temp_dir,
-                    "watermark.pdf"
+                    f"watermark_{index}.pdf"
                 )
 
-                create_pdf_watermark(
+                await create_pdf_watermark(
                     watermark_path,
                     text,
                     width,
-                    height
+                    height,
+                    color
                 )
 
-                watermark_reader = PdfReader(watermark_path)
-                watermark_page = watermark_reader.pages[0]
+                watermark_reader = PdfReader(
+                    watermark_path
+                )
 
-                page.merge_page(watermark_page)
+                watermark_page = (
+                    watermark_reader.pages[0]
+                )
+
+                page.merge_page(
+                    watermark_page
+                )
+
                 writer.add_page(page)
 
-            with open(output_path, "wb") as output_file:
+            with open(
+                output_path,
+                "wb"
+            ) as output_file:
                 writer.write(output_file)
 
-            with open(output_path, "rb") as pdf_file:
+            with open(
+                output_path,
+                "rb"
+            ) as pdf_file:
+
                 await update.effective_message.reply_document(
                     document=pdf_file,
-                    filename="watermarked.pdf",
+                    filename=safe_name + ".pdf",
                     caption="💧 Watermark added successfully.",
                     reply_markup=main_menu_button()
                 )
 
         else:
+
             output_path = os.path.join(
                 temp_dir,
-                "watermarked.jpg"
+                safe_name + ".jpg"
             )
 
-            watermark_image(
+            await asyncio.to_thread(
+                watermark_image,
                 input_path,
                 output_path,
-                text
+                text,
+                color
             )
 
-            with open(output_path, "rb") as image_file:
+            with open(
+                output_path,
+                "rb"
+            ) as image_file:
+
                 await update.effective_message.reply_document(
                     document=image_file,
-                    filename="watermarked.jpg",
+                    filename=safe_name + ".jpg",
                     caption="💧 Watermark added successfully.",
                     reply_markup=main_menu_button()
                 )
 
     except Exception as e:
-        logger.error(f"Watermark processing error: {e}")
+
+        logger.error(
+            f"Watermark processing error: {e}"
+        )
 
         await update.effective_message.reply_text(
             "❌ Unable to add the watermark.",
@@ -1658,15 +1934,22 @@ async def watermark_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     finally:
+
         try:
             if temp_dir and os.path.exists(temp_dir):
+
                 for filename in os.listdir(temp_dir):
-                    file_path = os.path.join(temp_dir, filename)
+
+                    file_path = os.path.join(
+                        temp_dir,
+                        filename
+                    )
 
                     if os.path.isfile(file_path):
                         os.remove(file_path)
 
                 os.rmdir(temp_dir)
+
         except Exception:
             pass
 
@@ -1675,16 +1958,61 @@ async def watermark_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-async def watermark_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def watermark_color_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     query = update.callback_query
     await query.answer()
 
-    temp_dir = context.user_data.get("watermark_dir")
+    color_name = query.data.replace(
+        "wm_color_",
+        ""
+    )
+
+    color = WATERMARK_COLORS.get(
+        color_name
+    )
+
+    if not color:
+        return WATERMARK_WAIT_COLOR
+
+    # Remove Cancel from the color prompt
+    await query.message.edit_reply_markup(
+        reply_markup=None
+    )
+
+    context.user_data["watermark_color"] = color
+
+    await watermark_process(
+        update,
+        context,
+        color
+    )
+
+    return ConversationHandler.END
+
+
+async def watermark_cancel(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    await query.answer()
+
+    temp_dir = context.user_data.get(
+        "watermark_dir"
+    )
 
     if temp_dir and os.path.exists(temp_dir):
+
         try:
             for filename in os.listdir(temp_dir):
-                file_path = os.path.join(temp_dir, filename)
+
+                file_path = os.path.join(
+                    temp_dir,
+                    filename
+                )
 
                 if os.path.isfile(file_path):
                     os.remove(file_path)
@@ -1692,6 +2020,7 @@ async def watermark_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             os.rmdir(temp_dir)
 
         except Exception as e:
+
             logger.warning(
                 f"Watermark cancel cleanup error: {e}"
             )
@@ -1704,6 +2033,7 @@ async def watermark_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     return ConversationHandler.END
+
 
 # =========================
 # COMING SOON FEATURES
@@ -2045,10 +2375,33 @@ def main():
                     pattern="^watermark_cancel$"
                 )
             ],
+
             WATERMARK_WAIT_TEXT: [
                 MessageHandler(
                     filters.TEXT & ~filters.COMMAND,
-                    watermark_process
+                    watermark_receive_text
+                ),
+                CallbackQueryHandler(
+                    watermark_cancel,
+                    pattern="^watermark_cancel$"
+                )
+            ],
+
+            WATERMARK_WAIT_NAME: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    watermark_receive_name
+                ),
+                CallbackQueryHandler(
+                    watermark_cancel,
+                    pattern="^watermark_cancel$"
+                )
+            ],
+
+            WATERMARK_WAIT_COLOR: [
+                CallbackQueryHandler(
+                    watermark_color_callback,
+                    pattern="^wm_color_"
                 ),
                 CallbackQueryHandler(
                     watermark_cancel,
@@ -2056,6 +2409,7 @@ def main():
                 )
             ]
         },
+
         fallbacks=[
             CallbackQueryHandler(
                 watermark_cancel,
@@ -2065,7 +2419,10 @@ def main():
                 inline_back_handler,
                 pattern="^back$"
             ),
-            CommandHandler("cancel", cancel)
+            CommandHandler(
+                "cancel",
+                cancel
+            )
         ]
     )
 
