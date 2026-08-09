@@ -23,6 +23,7 @@ from telegram.ext import (
 from PyPDF2 import PdfReader, PdfWriter, PdfMerger
 from PIL import Image, ImageDraw, ImageFont
 from images_to_pdf_functions import *
+from unlock_pdf_functions import *
 from reportlab.pdfgen import canvas
 from reportlab.lib.colors import Color
 
@@ -141,6 +142,9 @@ def main_keyboard():
         ],
         [
             InlineKeyboardButton("🖼️ Images → PDF", callback_data="images_to_pdf"),
+            InlineKeyboardButton("🔓 Unlock PDF", callback_data="unlock")
+        ],
+        [
             InlineKeyboardButton("📝 Text to PDF", callback_data="texttopdf")
         ],
         [
@@ -3267,6 +3271,61 @@ def main():
             CommandHandler("cancel", cancel)
         ],
     )
+
+    # Unlock PDF
+    unlock_handler = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(unlock_start, pattern="^unlock$"),
+        ],
+        states={
+            UNLOCK_WAIT_FILE: [
+                MessageHandler(
+                    filters.Document.PDF,
+                    unlock_receive_file
+                ),
+                CallbackQueryHandler(
+                    unlock_cancel,
+                    pattern="^unlock_cancel$"
+                )
+            ],
+            UNLOCK_WAIT_PASSWORD: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    unlock_receive_password
+                ),
+                CallbackQueryHandler(
+                    unlock_cancel,
+                    pattern="^unlock_cancel$"
+                )
+            ],
+            UNLOCK_WAIT_NAME: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    unlock_receive_name
+                ),
+                CallbackQueryHandler(
+                    unlock_cancel,
+                    pattern="^unlock_cancel$"
+                )
+            ]
+        },
+        fallbacks=[
+            CallbackQueryHandler(
+                unlock_cancel,
+                pattern="^unlock_cancel$"
+            ),
+            CallbackQueryHandler(
+                inline_back_handler,
+                pattern="^back$"
+            ),
+            CommandHandler(
+                "cancel",
+                cancel
+            )
+        ]
+    )
+
+    app.add_handler(unlock_handler)
 
     # Merge PDF
     merge_handler = ConversationHandler(
