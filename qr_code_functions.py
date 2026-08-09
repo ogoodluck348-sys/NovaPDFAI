@@ -423,7 +423,12 @@ async def qr_cancel(update, context):
                 InlineKeyboardButton("🔓 Unlock PDF", callback_data="unlock")
             ],
             [
-                InlineKeyboardButton("📝 Text to PDF", callback_data="texttopdf"),
+                InlineKeyboardButton("📝 Text to PDF", callback_data="texttopdf")
+            ],
+            [
+                InlineKeyboardButton("📱 QR Code Generator", callback_data="qr_code")
+            ],
+            [
                 InlineKeyboardButton("➕ More", callback_data="more")
             ]
         ])
