@@ -265,7 +265,11 @@ async def images_to_pdf_cancel(update, context):
             ],
             [
                 InlineKeyboardButton("🖼️ Images → PDF", callback_data="images_to_pdf"),
-                InlineKeyboardButton("📝 Text to PDF", callback_data="texttopdf")
+                InlineKeyboardButton("🔓 Unlock PDF", callback_data="unlock")
+            ],
+            [
+                InlineKeyboardButton("📝 Text to PDF", callback_data="texttopdf"),
+                InlineKeyboardButton("📱 QR Code Generator", callback_data="qr_code")
             ],
             [
                 InlineKeyboardButton("➕ More", callback_data="more")
