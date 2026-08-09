@@ -1612,6 +1612,12 @@ def main():
     app.add_handler(protect_handler)
     app.add_handler(merge_handler)
     app.add_handler(extract_handler)
+    app.add_handler(
+        CallbackQueryHandler(
+            summarize_start,
+            pattern="^summarize$"
+        )
+    )
     app.add_handler(summary_handler)
     # Text to PDF
     text_to_pdf_handler = ConversationHandler(
