@@ -5123,10 +5123,6 @@ def main():
                     ask_pdf_cancel,
                     pattern="^ask_pdf_cancel$"
                 ),
-                CallbackQueryHandler(
-                    inline_main_menu_handler,
-                    pattern="^main_menu$"
-                )
             ]
         },
         fallbacks=[
@@ -5579,6 +5575,16 @@ def main():
         )
     )
 
+
+    # Ask PDF global callback
+    # This ensures the Main Menu button can open Ask PDF even when
+    # another ConversationHandler has ended or is not active.
+    app.add_handler(
+        CallbackQueryHandler(
+            ask_pdf_start,
+            pattern="^ask_pdf$"
+        )
+    )
 
     # More menu inline button
     app.add_handler(
