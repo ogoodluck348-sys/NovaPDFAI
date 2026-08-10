@@ -4879,9 +4879,13 @@ def main():
                 inline_back_handler,
                 pattern="^back$"
             ),
+            MessageHandler(
+                filters.Regex(r"(?i)^cancel$"),
+                unlock_cancel
+            ),
             CommandHandler(
                 "cancel",
-                cancel
+                unlock_cancel
             )
         ]
     )
