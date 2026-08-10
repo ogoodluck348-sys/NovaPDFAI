@@ -1778,8 +1778,8 @@ async def ai_summarizer_start(update, context):
         message = query.message
         await message.edit_text(
             "🧠 <b>AI Explainer</b>\n\n"
-            "Send me any topic, text, notes, or information "
-            "you want Nova AI to summarize.\n\n"
+            "Send me any topic, question, text, notes, or information "
+            "you want Nova AI to explain in detail.\n\n"
             "Example:\n"
             "<i>Explain photosynthesis and its stages</i>",
             parse_mode="HTML",
@@ -1788,8 +1788,8 @@ async def ai_summarizer_start(update, context):
     else:
         message = await update.effective_message.reply_text(
             "🧠 <b>AI Explainer</b>\n\n"
-            "Send me any topic, text, notes, or information "
-            "you want Nova AI to summarize.\n\n"
+            "Send me any topic, question, text, notes, or information "
+            "you want Nova AI to explain in detail.\n\n"
             "Example:\n"
             "<i>Explain photosynthesis and its stages</i>",
             parse_mode="HTML",
