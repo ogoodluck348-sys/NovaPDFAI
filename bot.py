@@ -2234,6 +2234,43 @@ async def ai_summarizer_cancel(update, context):
 
 
 
+
+# =========================
+# UNLOCK PDF CANCEL
+# =========================
+
+async def unlock_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    context.user_data.clear()
+
+    await query.message.edit_text(
+        "🏠 NovaPDF AI\n\nChoose a tool:",
+        reply_markup=main_keyboard()
+    )
+
+    return ConversationHandler.END
+
+
+# =========================
+# IMAGES → PDF CANCEL
+# =========================
+
+async def images_to_pdf_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    context.user_data.clear()
+
+    await query.message.edit_text(
+        "🏠 NovaPDF AI\n\nChoose a tool:",
+        reply_markup=main_keyboard()
+    )
+
+    return ConversationHandler.END
+
+
 # =========================
 # ASK PDF
 # =========================
