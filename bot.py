@@ -2574,7 +2574,8 @@ USER QUESTION:
         )
 
         await update.effective_message.reply_text(
-            "❌ An error occurred while Nova AI was answering your question."
+            "❌ An error occurred while Nova AI was answering your question.",
+            reply_markup=main_menu_button()
         )
 
         return ASK_PDF_WAIT
