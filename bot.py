@@ -1816,6 +1816,9 @@ async def ai_summarizer_receive(update, context):
 
         return ConversationHandler.END
 
+    # Convert Gemini Markdown into clean Telegram text.
+    summary = clean_ai_explainer_text(summary)
+
     context.user_data["ai_summarizer_summary"] = summary
 
     await update.effective_message.reply_text(
