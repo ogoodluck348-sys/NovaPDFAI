@@ -4054,57 +4054,29 @@ def main():
             )
         ],
         states={
-            AI_SUMMARIZER_WAIT_INPUT: [
+            SUMMARY_WAIT_PDF: [
                 MessageHandler(
-                    filters.Regex(r"(?i)^cancel$"),
-                    unlock_cancel
-                ),
-                MessageHandler(
-                    filters.TEXT & ~filters.COMMAND,
+                    filters.Document.ALL,
                     summarize_receive
                 ),
                 CallbackQueryHandler(
-                    summarize_cancel,
-                    pattern="^summarize_cancel$"
-                )
-            ],
-            AI_SUMMARIZER_WAIT_OUTPUT: [
-                CallbackQueryHandler(
-                    ai_summarizer_send_text,
-                    pattern="^ai_summary_text$"
-                ),
-                CallbackQueryHandler(
-                    ai_summarizer_pdf,
-                    pattern="^ai_summary_pdf$"
-                ),
-                CallbackQueryHandler(
-                    summarize_cancel,
-                    pattern="^summarize_cancel$"
-                )
-            ],
-            AI_SUMMARIZER_WAIT_NAME: [
-                MessageHandler(
-                    filters.Regex(r"(?i)^cancel$"),
-                    unlock_cancel
-                ),
-                MessageHandler(
-                    filters.TEXT & ~filters.COMMAND,
-                    summarize_receive_name
-                ),
-                CallbackQueryHandler(
-                    summarize_cancel,
-                    pattern="^summarize_cancel$"
+                    summary_back,
+                    pattern="^summary_back$"
                 )
             ]
         },
         fallbacks=[
             CallbackQueryHandler(
-                summarize_cancel,
-                pattern="^summarize_cancel$"
+                summary_back,
+                pattern="^summary_back$"
+            ),
+            MessageHandler(
+                filters.Regex(r"(?i)^cancel$"),
+                summary_back
             ),
             CommandHandler(
                 "cancel",
-                cancel
+                summary_back
             )
         ]
     )
