@@ -1751,6 +1751,25 @@ def ai_summarizer_name_keyboard():
     ])
 
 
+async def qr_cancel_main_menu(update, context):
+    query = update.callback_query
+    await query.answer()
+
+    temp_dir = context.user_data.get("qr_dir")
+
+    if temp_dir:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+    context.user_data.clear()
+
+    await query.message.edit_text(
+        "🏠 NovaPDF AI\\n\\nChoose a tool:",
+        reply_markup=main_keyboard()
+    )
+
+    return ConversationHandler.END
+
+
 async def ai_summarizer_start(update, context):
     query = update.callback_query
 
@@ -4548,14 +4567,14 @@ def main():
                     pattern="^qr_generate$"
                 ),
                 CallbackQueryHandler(
-                    qr_cancel,
+                    qr_cancel_main_menu,
                     pattern="^qr_cancel$"
                 )
             ]
         },
         fallbacks=[
             CallbackQueryHandler(
-                qr_cancel,
+                qr_cancel_main_menu,
                 pattern="^qr_cancel$"
             ),
             CallbackQueryHandler(
