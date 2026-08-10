@@ -2276,6 +2276,20 @@ async def ask_pdf_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def ask_pdf_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Remove the previous Ask PDF prompt buttons.
+    await remove_prompt_cancel_button(
+        update,
+        context,
+        "ask_pdf_prompt_message_id"
+    )
+
+    # Remove the Main Menu button from the previous Ask PDF answer.
+    await remove_prompt_cancel_button(
+        update,
+        context,
+        "ask_pdf_main_menu_message_id"
+    )
+
     # Remove the previous Ask PDF prompt buttons when the user sends
     # another PDF.
     await remove_prompt_cancel_button(
@@ -2325,7 +2339,17 @@ async def ask_pdf_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return ASK_PDF_WAIT
 
-        # Store the new PDF as the active document.
+        # Clean extracted PDF text before sending it to the AI.
+        import re
+
+        extracted_text = extracted_text.replace("\x00", " ")
+        extracted_text = re.sub(r"[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]", " ", extracted_text)
+        extracted_text = re.sub(r"[ \t]+", " ", extracted_text)
+        extracted_text = re.sub(r"\n[ \t]+", "\n", extracted_text)
+        extracted_text = re.sub(r"\n{3,}", "\n\n", extracted_text)
+        extracted_text = extracted_text.strip()
+
+        # Store the cleaned PDF as the active document.
         context.user_data["ask_pdf_text"] = extracted_text[:30000]
         context.user_data["ask_pdf_name"] = document.file_name or "PDF"
         context.user_data["ask_pdf_history"] = []
@@ -2361,6 +2385,13 @@ async def ask_pdf_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update,
         context,
         "ask_pdf_prompt_message_id"
+    )
+
+    # Remove the Main Menu button from the previous Ask PDF answer.
+    await remove_prompt_cancel_button(
+        update,
+        context,
+        "ask_pdf_main_menu_message_id"
     )
 
     document = update.effective_message.document
@@ -2521,10 +2552,13 @@ USER QUESTION:
             if chunk:
                 is_last = start + chunk_size >= len(answer)
 
-                await update.effective_message.reply_text(
+                sent_message = await update.effective_message.reply_text(
                     chunk,
                     reply_markup=main_menu_button() if is_last else None
                 )
+
+                if is_last:
+                    context.user_data["ask_pdf_main_menu_message_id"] = sent_message.message_id
 
         return ASK_PDF_WAIT
 
