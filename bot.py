@@ -485,6 +485,25 @@ async def protect_receive_pdf(
         file = await document.get_file()
         await file.download_to_drive(input_path)
 
+        # Detect PDFs that are already password-protected.
+        reader = PdfReader(input_path)
+
+        if reader.is_encrypted:
+            shutil.rmtree(
+                temp_dir,
+                ignore_errors=True
+            )
+
+            context.user_data.clear()
+
+            await update.effective_message.reply_text(
+                "🔒 This PDF is already password-protected.\n\n"
+                "It cannot be protected again.",
+                reply_markup=main_menu_button()
+            )
+
+            return ConversationHandler.END
+
         context.user_data["protect_dir"] = temp_dir
         context.user_data["protect_input"] = input_path
 
@@ -655,7 +674,8 @@ async def protect_receive_name(
         logger.error(f"Protection error: {e}")
 
         await update.effective_message.reply_text(
-            "❌ Unable to protect this PDF."
+            "❌ Unable to protect this PDF.",
+            reply_markup=main_menu_button()
         )
 
     finally:
