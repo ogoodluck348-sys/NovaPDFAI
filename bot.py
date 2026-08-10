@@ -384,7 +384,7 @@ async def more_back_main_callback(update: Update, context: ContextTypes.DEFAULT_
     await query.answer()
 
     await query.message.edit_text(
-        "🏠 NovaPDF AI\n\nChoose a tool:",
+        "🏠 NovaPDF AI\\n\\nChoose a tool:",
         reply_markup=main_keyboard()
     )
 
@@ -1763,7 +1763,7 @@ async def qr_cancel_main_menu(update, context):
     context.user_data.clear()
 
     await query.message.edit_text(
-        "🏠 NovaPDF AI\\n\\nChoose a tool:",
+        "🏠 NovaPDF AI\n\nChoose a tool:",
         reply_markup=main_keyboard()
     )
 
@@ -4288,28 +4288,27 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu_button()
     )
 
-async def inline_main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def inline_main_menu_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     query = update.callback_query
     await query.answer()
 
-    # Clear any active operation
+    # Clear any active operation/session data.
     context.user_data.clear()
 
-    # Restore the full Main Menu in the SAME message.
-    # Document/photo messages cannot have their text replaced,
-    # so update their inline keyboard instead.
     try:
-        if query.message.document or query.message.photo:
-            await query.message.edit_reply_markup(
-                reply_markup=main_keyboard()
-            )
-        else:
-            await query.message.edit_text(
-                "🏠 NovaPDF AI\n\nChoose a tool:",
-                reply_markup=main_keyboard()
-            )
+        # Remove the Main Menu button from the result message.
+        await query.message.edit_reply_markup(reply_markup=None)
     except Exception as e:
-        logger.warning(f"Could not restore Main Menu: {e}")
+        logger.warning(f"Could not remove old Main Menu button: {e}")
+
+    # Send a completely fresh Main Menu message.
+    await query.message.reply_text(
+        "🏠 NovaPDF AI\n\nChoose a tool:",
+        reply_markup=main_keyboard()
+    )
 
     return ConversationHandler.END
 
