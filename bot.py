@@ -927,7 +927,8 @@ async def merge_receive_name(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logger.error(f"Merge error: {e}")
 
         await update.effective_message.reply_text(
-            "❌ Unable to merge the PDF files."
+            "❌ Unable to merge the PDF files.",
+            reply_markup=main_menu_button()
         )
 
     finally:
