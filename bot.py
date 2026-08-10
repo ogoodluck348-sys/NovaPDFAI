@@ -4296,11 +4296,18 @@ async def inline_main_menu_handler(update: Update, context: ContextTypes.DEFAULT
     context.user_data.clear()
 
     # Restore the full Main Menu in the SAME message.
+    # Document/photo messages cannot have their text replaced,
+    # so update their inline keyboard instead.
     try:
-        await query.message.edit_text(
-            "🏠 NovaPDF AI\n\nChoose a tool:",
-            reply_markup=main_keyboard()
-        )
+        if query.message.document or query.message.photo:
+            await query.message.edit_reply_markup(
+                reply_markup=main_keyboard()
+            )
+        else:
+            await query.message.edit_text(
+                "🏠 NovaPDF AI\n\nChoose a tool:",
+                reply_markup=main_keyboard()
+            )
     except Exception as e:
         logger.warning(f"Could not restore Main Menu: {e}")
 
