@@ -2134,7 +2134,7 @@ async def ai_summarizer_receive_name(update, context):
         )
 
         await update.effective_message.reply_text(
-            f"❌ PDF error: {type(e).__name__}: {e}",
+            "❌ Failed to create the explanation PDF.",
             reply_markup=main_menu_button()
         )
 
