@@ -4061,7 +4061,7 @@ def main():
                 ),
                 MessageHandler(
                     filters.TEXT & ~filters.COMMAND,
-                    ai_summarizer_receive
+                    summarize_receive
                 ),
                 CallbackQueryHandler(
                     ai_summarizer_cancel,
@@ -4089,7 +4089,7 @@ def main():
                 ),
                 MessageHandler(
                     filters.TEXT & ~filters.COMMAND,
-                    ai_summarizer_receive_name
+                    summarize_receive_name
                 ),
                 CallbackQueryHandler(
                     ai_summarizer_cancel,
