@@ -4064,8 +4064,8 @@ def main():
                     summarize_receive
                 ),
                 CallbackQueryHandler(
-                    ai_summarizer_cancel,
-                    pattern="^ai_summarizer_cancel$"
+                    summarize_cancel,
+                    pattern="^summarize_cancel$"
                 )
             ],
             AI_SUMMARIZER_WAIT_OUTPUT: [
@@ -4078,8 +4078,8 @@ def main():
                     pattern="^ai_summary_pdf$"
                 ),
                 CallbackQueryHandler(
-                    ai_summarizer_cancel,
-                    pattern="^ai_summarizer_cancel$"
+                    summarize_cancel,
+                    pattern="^summarize_cancel$"
                 )
             ],
             AI_SUMMARIZER_WAIT_NAME: [
@@ -4092,15 +4092,15 @@ def main():
                     summarize_receive_name
                 ),
                 CallbackQueryHandler(
-                    ai_summarizer_cancel,
-                    pattern="^ai_summarizer_cancel$"
+                    summarize_cancel,
+                    pattern="^summarize_cancel$"
                 )
             ]
         },
         fallbacks=[
             CallbackQueryHandler(
-                ai_summarizer_cancel,
-                pattern="^ai_summarizer_cancel$"
+                summarize_cancel,
+                pattern="^summarize_cancel$"
             ),
             CommandHandler(
                 "cancel",
