@@ -4290,12 +4290,12 @@ def main():
     ask_pdf_handler = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(
-                ask_pdf_start,
+                ask_pdf_cancel,
                 pattern="^ask_pdf$"
             ),
             MessageHandler(
                 filters.Regex("^📚 Ask PDF$"),
-                ask_pdf_start
+                ask_pdf_cancel
             )
         ],
         states={
@@ -4778,7 +4778,7 @@ def main():
     # another ConversationHandler has ended or is not active.
     app.add_handler(
         CallbackQueryHandler(
-            ask_pdf_start,
+            ask_pdf_cancel,
             pattern="^ask_pdf$"
         )
     )
