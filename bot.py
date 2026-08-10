@@ -551,11 +551,7 @@ async def protect_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if temp_dir and os.path.exists(temp_dir):
         try:
-            for filename in os.listdir(temp_dir):
-                file_path = os.path.join(temp_dir, filename)
-                if os.path.isfile(file_path):
-                    os.remove(file_path)
-            os.rmdir(temp_dir)
+            shutil.rmtree(temp_dir, ignore_errors=True)
         except Exception as e:
             logger.warning(f"Protect cancel cleanup error: {e}")
 
