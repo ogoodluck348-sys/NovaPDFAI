@@ -1866,6 +1866,7 @@ async def summarize_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 is_last = start + chunk_size >= len(summary)
                 await update.effective_message.reply_text(
                     chunk,
+                    parse_mode="Markdown",
                     reply_markup=main_menu_button() if is_last else None
                 )
 
