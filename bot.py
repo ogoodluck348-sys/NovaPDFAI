@@ -3847,6 +3847,10 @@ def main():
                     protect_receive_pdf
                 ),
                 CallbackQueryHandler(
+                    protect_cancel,
+                    pattern="^protect_cancel$"
+                ),
+                CallbackQueryHandler(
                     protect_back,
                     pattern="^protect_back$"
                 )
