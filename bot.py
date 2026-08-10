@@ -1725,6 +1725,38 @@ async def extract_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ASK_PDF_WAIT
 
 
+async def ask_pdf_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+
+    if query:
+        await query.answer()
+        message = query.message
+    else:
+        message = update.effective_message
+
+    context.user_data.clear()
+
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Cancel", callback_data="ask_pdf_cancel")]
+    ])
+
+    if query:
+        await message.edit_text(
+            "📚 Ask PDF\n\n"
+            "Send a PDF and ask questions about it.\n\n"
+            "You can send another PDF anytime to automatically switch documents.",
+            reply_markup=keyboard
+        )
+    else:
+        await message.reply_text(
+            "📚 Ask PDF\n\n"
+            "Send a PDF and ask questions about it.\n\n"
+            "You can send another PDF anytime to automatically switch documents.",
+            reply_markup=keyboard
+        )
+
+    return ASK_PDF_WAIT
+
 async def ask_pdf_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     document = update.effective_message.document
 
