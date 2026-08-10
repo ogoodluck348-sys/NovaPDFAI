@@ -96,9 +96,9 @@ IMAGES_WAIT_FORMAT = 17
 COMPRESS_WAIT_FILE = 18
 COMPRESS_WAIT_NAME = 19
 COMPRESS_WAIT_LEVEL = 20
-AI_SUMMARIZER_WAIT_INPUT = 28
-AI_SUMMARIZER_WAIT_OUTPUT = 29
-AI_SUMMARIZER_WAIT_NAME = 30
+AI_SUMMARIZER_WAIT_INPUT = 31
+AI_SUMMARIZER_WAIT_OUTPUT = 32
+AI_SUMMARIZER_WAIT_NAME = 33
 
 
 
@@ -4086,34 +4086,54 @@ def main():
     ai_summarizer_handler = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(
-                summarize_start,
+                ai_summarizer_start,
                 pattern="^ai_summarizer$"
             )
         ],
         states={
-            SUMMARY_WAIT_PDF: [
+            AI_SUMMARIZER_WAIT_INPUT: [
                 MessageHandler(
-                    filters.Document.ALL,
-                    summarize_receive
+                    filters.TEXT & ~filters.COMMAND,
+                    ai_summarizer_receive
                 ),
                 CallbackQueryHandler(
-                    summary_back,
-                    pattern="^summary_back$"
+                    ai_summarizer_cancel,
+                    pattern="^ai_summarizer_cancel$"
+                )
+            ],
+            AI_SUMMARIZER_WAIT_OUTPUT: [
+                CallbackQueryHandler(
+                    ai_summarizer_send_text,
+                    pattern="^ai_summary_text$"
+                ),
+                CallbackQueryHandler(
+                    ai_summarizer_pdf,
+                    pattern="^ai_summary_pdf$"
+                ),
+                CallbackQueryHandler(
+                    ai_summarizer_cancel,
+                    pattern="^ai_summarizer_cancel$"
+                )
+            ],
+            AI_SUMMARIZER_WAIT_NAME: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    ai_summarizer_receive_name
+                ),
+                CallbackQueryHandler(
+                    ai_summarizer_cancel,
+                    pattern="^ai_summarizer_cancel$"
                 )
             ]
         },
         fallbacks=[
             CallbackQueryHandler(
-                summary_back,
-                pattern="^summary_back$"
-            ),
-            MessageHandler(
-                filters.Regex(r"(?i)^cancel$"),
-                summary_back
+                ai_summarizer_cancel,
+                pattern="^ai_summarizer_cancel$"
             ),
             CommandHandler(
                 "cancel",
-                summary_back
+                cancel
             )
         ]
     )
