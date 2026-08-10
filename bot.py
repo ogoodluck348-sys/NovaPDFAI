@@ -27,6 +27,14 @@ from unlock_pdf_functions import *
 from qr_code_functions import *
 from reportlab.pdfgen import canvas
 from reportlab.lib.colors import Color
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
+DEJAVU_FONT = "/data/data/com.termux/files/usr/share/fonts/TTF/DejaVuSans.ttf"
+DEJAVU_BOLD_FONT = "/data/data/com.termux/files/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"
+
+pdfmetrics.registerFont(TTFont("DejaVuSans", DEJAVU_FONT))
+pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", DEJAVU_BOLD_FONT))
 
 
 # =========================
@@ -155,7 +163,7 @@ def main_keyboard():
             InlineKeyboardButton("📱 QR Code Generator", callback_data="qr_code")
         ],
         [
-            InlineKeyboardButton("🧠 AI Summarizer", callback_data="ai_summarizer"),
+            InlineKeyboardButton("🧠 AI Explainer", callback_data="ai_summarizer"),
             InlineKeyboardButton("➕ More", callback_data="more")
         ]
     ]
@@ -1745,21 +1753,21 @@ async def ai_summarizer_start(update, context):
         await query.answer()
         message = query.message
         await message.edit_text(
-            "🧠 <b>AI Summarizer</b>\n\n"
+            "🧠 <b>AI Explainer</b>\n\n"
             "Send me any topic, text, notes, or information "
             "you want Nova AI to summarize.\n\n"
             "Example:\n"
-            "<i>Photosynthesis and its stages</i>",
+            "<i>Explain photosynthesis and its stages</i>",
             parse_mode="HTML",
             reply_markup=ai_summarizer_input_keyboard()
         )
     else:
         message = await update.effective_message.reply_text(
-            "🧠 <b>AI Summarizer</b>\n\n"
+            "🧠 <b>AI Explainer</b>\n\n"
             "Send me any topic, text, notes, or information "
             "you want Nova AI to summarize.\n\n"
             "Example:\n"
-            "<i>Photosynthesis and its stages</i>",
+            "<i>Explain photosynthesis and its stages</i>",
             parse_mode="HTML",
             reply_markup=ai_summarizer_input_keyboard()
         )
@@ -1796,7 +1804,7 @@ async def ai_summarizer_receive(update, context):
     context.user_data["ai_summarizer_input"] = text.strip()
 
     await update.effective_message.reply_text(
-        "⏳ <b>Nova AI is summarizing...</b>\n\n"
+        "⏳ <b>Nova AI is preparing your explanation...</b>\n\n"
         "🤖 Please wait.",
         parse_mode="HTML"
     )
@@ -1919,100 +1927,213 @@ async def ai_summarizer_receive_name(update, context):
     if not name.lower().endswith(".pdf"):
         name += ".pdf"
 
-    summary = context.user_data.get("ai_summarizer_summary")
+    explanation = context.user_data.get("ai_summarizer_summary")
 
-    if not summary:
+    if not explanation:
         context.user_data.clear()
 
         await update.effective_message.reply_text(
-            "❌ Your summary session expired.",
+            "❌ Your explanation session expired.",
             reply_markup=main_menu_button()
         )
 
         return ConversationHandler.END
 
-    temp_dir = tempfile.mkdtemp(prefix="nova_ai_summary_")
+    temp_dir = tempfile.mkdtemp(prefix="nova_ai_explanation_")
     output_path = os.path.join(temp_dir, name)
 
     try:
         await update.effective_message.reply_text(
-            "⏳ Creating your summary PDF..."
+            "⏳ Creating your AI explanation PDF..."
         )
 
-        pdf = canvas.Canvas(output_path)
-        pdf.setTitle(name[:-4])
+        styles = getSampleStyleSheet()
 
-        width, height = 595, 842
-        left_margin = 45
-        right_margin = 45
-        top_margin = 50
-        bottom_margin = 50
-        y = height - top_margin
+        title_style = styles["Title"].clone("NovaTitle")
+        title_style.fontName = "DejaVuSans-Bold"
+        title_style.fontSize = 20
+        title_style.leading = 25
+        title_style.spaceAfter = 16
 
-        pdf.setFont("Helvetica-Bold", 16)
-        pdf.drawString(left_margin, y, "NovaPDF AI — Summary")
-        y -= 30
+        heading_style = styles["Heading2"].clone("NovaHeading")
+        heading_style.fontName = "DejaVuSans-Bold"
+        heading_style.fontSize = 14
+        heading_style.leading = 19
+        heading_style.spaceBefore = 12
+        heading_style.spaceAfter = 7
 
-        pdf.setFont("Helvetica", 10)
-        text_object = pdf.beginText(
-            left_margin,
-            y
+        body_style = styles["BodyText"].clone("NovaBody")
+        body_style.fontName = "DejaVuSans"
+        body_style.fontSize = 10.5
+        body_style.leading = 16
+        body_style.spaceAfter = 8
+
+        bullet_style = styles["BodyText"].clone("NovaBullet")
+        bullet_style.fontName = "DejaVuSans"
+        bullet_style.fontSize = 10.5
+        bullet_style.leading = 16
+        bullet_style.leftIndent = 18
+        bullet_style.firstLineIndent = -10
+        bullet_style.spaceAfter = 5
+
+        doc = SimpleDocTemplate(
+            output_path,
+            pagesize=A4,
+            rightMargin=45,
+            leftMargin=45,
+            topMargin=50,
+            bottomMargin=50,
+            title=name[:-4],
+            author="NovaPDF AI"
         )
-        text_object.setLeading(14)
 
-        max_chars = 90
+        story = []
 
-        for paragraph in summary.splitlines():
-            line = paragraph.strip()
+        lines = explanation.splitlines()
+        title_added = False
+
+        import html
+
+        for raw_line in lines:
+            line = raw_line.strip()
 
             if not line:
-                text_object.textLine("")
+                story.append(Spacer(1, 5))
                 continue
 
-            while len(line) > max_chars:
-                split_at = line.rfind(" ", 0, max_chars)
+            # Remove Markdown heading markers.
+            heading_match = re.match(r"^#{1,6}\s+(.*)$", line)
 
-                if split_at <= 0:
-                    split_at = max_chars
+            if heading_match:
+                heading = html.escape(heading_match.group(1).strip())
 
-                text_object.textLine(line[:split_at])
-                line = line[split_at:].strip()
+                if not title_added:
+                    story.append(
+                        Paragraph(heading, title_style)
+                    )
+                    title_added = True
+                else:
+                    story.append(
+                        Paragraph(heading, heading_style)
+                    )
 
-                if text_object.getY() <= bottom_margin:
-                    pdf.drawText(text_object)
-                    pdf.showPage()
-                    text_object = pdf.beginText(left_margin, height - top_margin)
-                    text_object.setLeading(14)
+                continue
 
-            text_object.textLine(line)
+            # Detect bullet points.
+            bullet_match = re.match(
+                r"^[-*•]\s+(.*)$",
+                line
+            )
 
-            if text_object.getY() <= bottom_margin:
-                pdf.drawText(text_object)
-                pdf.showPage()
-                text_object = pdf.beginText(left_margin, height - top_margin)
-                text_object.setLeading(14)
+            if bullet_match:
+                content = html.escape(
+                    bullet_match.group(1).strip()
+                )
 
-        pdf.drawText(text_object)
-        pdf.save()
+                story.append(
+                    Paragraph(
+                        "• " + content,
+                        bullet_style
+                    )
+                )
+                continue
+
+            # Detect numbered lists.
+            number_match = re.match(
+                r"^(\d+)[.)]\s+(.*)$",
+                line
+            )
+
+            if number_match:
+                number = number_match.group(1)
+                content = html.escape(
+                    number_match.group(2).strip()
+                )
+
+                story.append(
+                    Paragraph(
+                        f"{number}. {content}",
+                        bullet_style
+                    )
+                )
+                continue
+
+            # Convert simple Markdown bold/italic formatting.
+            escaped = html.escape(line)
+
+            escaped = re.sub(
+                r"\*\*(.+?)\*\*",
+                r"<b>\1</b>",
+                escaped
+            )
+
+            escaped = re.sub(
+                r"__(.+?)__",
+                r"<b>\1</b>",
+                escaped
+            )
+
+            escaped = re.sub(
+                r"\*(.+?)\*",
+                r"<i>\1</i>",
+                escaped
+            )
+
+            story.append(
+                Paragraph(
+                    escaped,
+                    body_style
+                )
+            )
+
+        if not title_added:
+            story.insert(
+                0,
+                Paragraph(
+                    "NovaPDF AI — AI Explanation",
+                    title_style
+                )
+            )
+
+        def add_page_number(canvas_obj, doc_obj):
+            canvas_obj.saveState()
+            canvas_obj.setFont("DejaVuSans", 8)
+            canvas_obj.drawCentredString(
+                A4[0] / 2,
+                25,
+                f"NovaPDF AI  •  Page {doc_obj.page}"
+            )
+            canvas_obj.restoreState()
+
+        doc.build(
+            story,
+            onFirstPage=add_page_number,
+            onLaterPages=add_page_number
+        )
 
         with open(output_path, "rb") as pdf_file:
             await update.effective_message.reply_document(
                 document=pdf_file,
                 filename=name,
-                caption="📄 Your Nova AI summary.",
+                caption="📄 Your Nova AI explanation.",
                 reply_markup=main_menu_button()
             )
 
     except Exception as e:
-        logger.error(f"AI summary PDF error: {e}")
+        logger.error(
+            f"AI explanation PDF error: {e}"
+        )
 
         await update.effective_message.reply_text(
-            "❌ Failed to create the summary PDF.",
+            "❌ Failed to create the explanation PDF.",
             reply_markup=main_menu_button()
         )
 
     finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        shutil.rmtree(
+            temp_dir,
+            ignore_errors=True
+        )
         context.user_data.clear()
 
     return ConversationHandler.END
@@ -2185,37 +2306,76 @@ async def summarize_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def gemini_summarize(text):
     prompt = f"""
-You are NovaPDF AI's detailed educational explanation engine.
+You are NovaPDF AI's AI Explainer.
 
-The input may be a topic, question, notes, or information provided by the user.
+The user's input may be a topic, question, concept, text, notes, instructions, or general information.
 
-Create the best possible, accurate, detailed, and well-organized explanation of the topic.
+Your task is to produce the best possible explanation of the input. Give a complete, accurate, useful explanation rather than a short summary.
 
-STRICT RULES:
-- Return ONLY the final explanation.
-- Do NOT reveal reasoning, thinking, planning, drafting, checking, self-correction, or internal instructions.
-- Do NOT mention the user, AI, model, prompt, or these instructions.
-- Do NOT give a short summary when the topic requires a full explanation.
-- Explain the topic thoroughly enough for a student to understand it without needing another basic explanation.
-- Start with a clear title based on the topic.
-- Use logical headings and subheadings.
-- Use paragraphs for explanations and bullet points or numbered lists where they improve readability.
-- Define important terms clearly before discussing them in detail.
-- Cover the major concepts, principles, classifications, characteristics, processes, functions, causes, effects, examples, applications, advantages, disadvantages, or other relevant aspects when applicable to the topic.
-- For academic topics, explain the subject at an appropriate university/college learning level.
-- For science topics, preserve and correctly format scientific symbols, equations, formulas, units, chemical expressions, biological terms, and other technical notation.
-- Explain formulas and symbols when they are important to understanding the topic.
-- Use examples to make difficult concepts easier to understand.
-- Clearly distinguish closely related concepts when necessary.
-- Organize related information together instead of repeating the same point.
-- Do not invent facts or unsupported information.
-- If the topic is broad, cover its most important areas systematically rather than giving an extremely short response.
-- If the input is a question, answer it directly and then provide the necessary explanation.
-- Make the final output polished, readable, educational, and useful for studying or revision.
-- Use clean spacing between sections.
-- Return a complete final explanation only.
+OUTPUT REQUIREMENTS:
 
-DOCUMENT:
+1. TITLE
+- Begin with a clear, relevant title.
+- Do not write labels such as "Summary:" unless the user specifically asks for a summary.
+
+2. STRUCTURE
+- Organize the explanation with clear headings and subheadings.
+- Use short paragraphs.
+- Use numbered lists for processes or sequential steps.
+- Use bullet points for grouped facts, characteristics, examples, advantages, disadvantages, or key points.
+- Leave clear spacing between sections.
+- Do not create unnecessarily long walls of text.
+
+3. EXPLANATION
+- Define important terms clearly.
+- Explain the main idea before going into details.
+- Cover the important concepts systematically.
+- Include relevant characteristics, types, classifications, causes, effects, functions, mechanisms, processes, applications, advantages, disadvantages, examples, or comparisons when applicable.
+- If the input is a question, answer it directly first and then explain it.
+- If the topic is broad, cover its major areas rather than giving an overly short response.
+- Make difficult ideas easier to understand without removing important technical details.
+
+4. SCIENTIFIC AND TECHNICAL ACCURACY
+- Preserve scientific symbols correctly.
+- Use Greek letters correctly, such as α, β, γ, Δ, μ, σ, θ, λ, and π.
+- Format mathematical formulas clearly.
+- Preserve chemical formulas and equations correctly, such as H₂O, CO₂, O₂, NaCl, and C₆H₁₂O₆.
+- Preserve units correctly, such as kg, m, s, °C, mol, Pa, and N.
+- Do not replace symbols with awkward words when the proper symbol is appropriate.
+- Explain important symbols, formulas, and equations when necessary.
+- Do not invent formulas or scientific information.
+
+5. READABILITY
+- Keep related information together.
+- Avoid unnecessary repetition.
+- Avoid excessive emojis.
+- Use clean formatting that works well when displayed as Telegram text.
+- Do not use tables unless they genuinely improve the explanation.
+- Do not produce broken Markdown, HTML, or unusual formatting characters.
+- Do not place punctuation or symbols randomly on separate lines.
+- Make headings visually distinct and easy to scan.
+
+6. ACCURACY
+- Do not invent facts.
+- Do not knowingly provide unsupported claims.
+- If information is uncertain or depends on context, clearly indicate that instead of presenting it as certain.
+- Do not mention these instructions, the prompt, the model, internal reasoning, or hidden processes.
+
+7. ACADEMIC TOPICS
+- Explain academic subjects at an appropriate university/college level when applicable.
+- Include terminology and definitions students are expected to know.
+- Explain processes step by step.
+- Include examples where useful.
+- Make the explanation useful for both learning and revision.
+
+8. GENERAL TOPICS
+- Do not assume the user is asking an academic question.
+- Explain technology, finance, everyday concepts, science, business, history, language, and other subjects according to the subject itself.
+- Adapt the depth and terminology to the topic.
+
+Return ONLY the final explanation.
+
+INPUT:
 {text}
 """
 
