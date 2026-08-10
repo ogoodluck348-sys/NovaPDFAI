@@ -5294,6 +5294,13 @@ def main():
             pattern="^main_menu$"
         )
     )
+    app.add_handler(
+        CallbackQueryHandler(
+            ai_summarizer_start,
+            pattern="^ai_summarizer$"
+        )
+    )
+
 
 
     # Ask PDF global callback
