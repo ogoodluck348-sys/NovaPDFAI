@@ -1839,6 +1839,9 @@ async def summarize_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         summary = await gemini_summarize(text_for_gemini)
 
+        if summary:
+            summary = clean_ai_explainer_text(summary)
+
         if not summary:
             await update.effective_message.reply_text(
                 "❌ Nova AI couldn't generate a summary at the moment.",
@@ -1890,6 +1893,40 @@ async def summarize_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return ConversationHandler.END
 
+
+
+def clean_ai_explainer_text(text):
+    """Convert AI Markdown into clean, readable Telegram text."""
+    import re
+
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # Remove Markdown headings but keep the heading text.
+    text = re.sub(r"^\s*#{1,6}\s*", "", text, flags=re.MULTILINE)
+
+    # Convert Markdown bullets to clean bullets.
+    text = re.sub(r"^\s*[-*+]\s+", "• ", text, flags=re.MULTILINE)
+
+    # Remove Markdown emphasis markers while preserving the words.
+    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
+    text = re.sub(r"__(.*?)__", r"\1", text)
+    text = re.sub(r"\*(.*?)\*", r"\1", text)
+    text = re.sub(r"_(.*?)_", r"\1", text)
+
+    # Clean numbered-list spacing.
+    text = re.sub(r"^\s*(\d+)\.\s*", r"\1. ", text, flags=re.MULTILINE)
+
+    # Remove accidental code fences.
+    text = re.sub(r"```(?:markdown|md|text)?", "", text, flags=re.IGNORECASE)
+    text = text.replace("```", "")
+
+    # Remove trailing spaces.
+    text = re.sub(r"[ \t]+$", "", text, flags=re.MULTILINE)
+
+    # Keep paragraphs/sections clearly separated.
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    return text.strip()
 
 async def gemini_summarize(text):
     prompt = f"""
