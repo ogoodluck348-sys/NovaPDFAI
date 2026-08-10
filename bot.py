@@ -4813,12 +4813,12 @@ def main():
     ask_pdf_handler = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(
-                ask_pdf_cancel,
+                ask_pdf_start,
                 pattern="^ask_pdf$"
             ),
             MessageHandler(
                 filters.Regex("^📚 Ask PDF$"),
-                ask_pdf_cancel
+                ask_pdf_start
             )
         ],
         states={
