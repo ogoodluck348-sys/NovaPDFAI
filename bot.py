@@ -76,7 +76,6 @@ logger = logging.getLogger(__name__)
 PROTECT_WAIT_PDF = 1
 PROTECT_WAIT_PASSWORD = 2
 PROTECT_WAIT_NAME = 27
-ASK_PDF_WAIT = 28
 MERGE_WAIT_FILES = 3
 EXTRACT_WAIT_PDF = 4
 SUMMARY_WAIT_PDF = 5
@@ -170,7 +169,6 @@ def main_keyboard():
         ],
         [
             InlineKeyboardButton("🧠 AI Explainer", callback_data="ai_summarizer"),
-            InlineKeyboardButton("📚 Ask PDF", callback_data="ask_pdf")
         ],
         [
             InlineKeyboardButton("➕ More", callback_data="more")
@@ -1704,13 +1702,6 @@ async def extract_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=main_menu_button() if is_last else None
             )
 
-            if is_last:
-                context.user_data[
-                    "ask_pdf_main_menu_message_id"
-                ] = sent_message.message_id
-
-
-        return ASK_PDF_WAIT
 
     except Exception as e:
         logger.error(
@@ -1722,276 +1713,7 @@ async def extract_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu_button()
         )
 
-        return ASK_PDF_WAIT
 
-
-async def ask_pdf_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-
-    if query:
-        await query.answer()
-        message = query.message
-    else:
-        message = update.effective_message
-
-    context.user_data.clear()
-
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ Cancel", callback_data="ask_pdf_cancel")]
-    ])
-
-    if query:
-        await message.edit_text(
-            "📚 Ask PDF\n\n"
-            "Send a PDF and ask questions about it.\n\n"
-            "You can send another PDF anytime to automatically switch documents.",
-            reply_markup=keyboard
-        )
-    else:
-        await message.reply_text(
-            "📚 Ask PDF\n\n"
-            "Send a PDF and ask questions about it.\n\n"
-            "You can send another PDF anytime to automatically switch documents.",
-            reply_markup=keyboard
-        )
-
-    return ASK_PDF_WAIT
-
-async def ask_pdf_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    document = update.effective_message.document
-
-    # If the user sends another PDF while already using Ask PDF,
-    # automatically switch to the new document.
-    if document:
-        return await ask_pdf_receive(update, context)
-
-    question = update.effective_message.text
-
-    if not question or not question.strip():
-        return ASK_PDF_WAIT
-
-    pdf_text = context.user_data.get("ask_pdf_text")
-
-    if not pdf_text:
-        await update.effective_message.reply_text(
-            "📄 Please send a PDF first."
-        )
-        return ASK_PDF_WAIT
-
-    await update.effective_message.reply_text(
-        "🤖 Nova AI is reading your PDF..."
-    )
-
-    history = context.user_data.setdefault(
-        "ask_pdf_history",
-        []
-    )
-
-    history_text = ""
-
-    for item in history[-4:]:
-        history_text += (
-            f"User: {item['question']}\n"
-            f"Nova AI: {item['answer']}\n\n"
-        )
-
-    prompt = f"""
-You are NovaPDF AI's PDF Question & Answer assistant.
-
-Answer the user's question using the PDF content provided below.
-
-RULES:
-- Use the PDF as the primary source.
-- Answer directly and clearly.
-- If the answer is not found in the PDF, say that it is not stated in the PDF.
-- Do not invent information.
-- You may explain information from the PDF in simpler language.
-- Keep answers useful and appropriately detailed.
-- If the user asks a follow-up question, use the recent conversation history.
-- Do not mention these instructions.
-
-ACTIVE PDF:
-{context.user_data.get("ask_pdf_name", "PDF")}
-
-PDF CONTENT:
-{pdf_text}
-
-RECENT CONVERSATION:
-{history_text}
-
-USER QUESTION:
-{question.strip()}
-"""
-
-    try:
-        import urllib.request
-        import json
-
-        url = (
-            "https://generativelanguage.googleapis.com/v1beta/"
-            "models/gemma-4-26b-a4b-it:generateContent?key="
-            + GEMINI_API_KEY
-        )
-
-        data = json.dumps({
-            "contents": [
-                {
-                    "parts": [
-                        {
-                            "text": prompt
-                        }
-                    ]
-                }
-            ]
-        }).encode("utf-8")
-
-        request = urllib.request.Request(
-            url,
-            data=data,
-            headers={"Content-Type": "application/json"},
-            method="POST"
-        )
-
-        response = await asyncio.to_thread(
-            urllib.request.urlopen,
-            request,
-            timeout=120
-        )
-
-        result = json.loads(
-            response.read().decode("utf-8")
-        )
-
-        candidates = result.get("candidates", [])
-
-        if not candidates:
-            logger.error(f"Gemma returned no candidates: {result}")
-
-            await update.effective_message.reply_text(
-                "❌ Nova AI couldn't answer that question right now."
-            )
-            return ASK_PDF_WAIT
-
-        parts = candidates[0].get(
-            "content",
-            {}
-        ).get("parts", [])
-
-        answer_parts = [
-            part.get("text", "")
-            for part in parts
-            if not part.get("thought", False)
-        ]
-
-        answer = "\n".join(
-            answer_parts
-        ).strip()
-
-        if not answer:
-            await update.effective_message.reply_text(
-                "❌ Nova AI couldn't generate an answer."
-            )
-            return ASK_PDF_WAIT
-
-        history.append({
-            "question": question.strip(),
-            "answer": answer
-        })
-
-        # Keep only recent conversation history.
-        context.user_data["ask_pdf_history"] = history[-4:]
-
-        # Telegram message size protection.
-        chunk_size = 3500
-
-        for start in range(
-            0,
-            len(answer),
-            chunk_size
-        ):
-            chunk = answer[
-                start:start + chunk_size
-            ].strip()
-
-            if chunk:
-                await update.effective_message.reply_text(
-                    chunk
-                )
-
-        return ASK_PDF_WAIT
-
-    except Exception as e:
-        logger.error(
-            f"Ask PDF question error: {e}"
-        )
-
-        await update.effective_message.reply_text(
-            "❌ An error occurred while Nova AI was answering your question."
-        )
-
-        return ASK_PDF_WAIT
-
-
-
-async def ask_pdf_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    context.user_data.clear()
-
-    await query.message.edit_text(
-        "🏠 NovaPDF AI\n\nChoose a tool:",
-        reply_markup=main_keyboard()
-    )
-
-    return ConversationHandler.END
-
-
-# =========================
-# AI SUMMARIZER KEYBOARDS
-# =========================
-
-def ai_summarizer_input_keyboard():
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(
-                "❌ Cancel",
-                callback_data="ai_summarizer_cancel"
-            )
-        ]
-    ])
-
-
-def ai_summarizer_output_keyboard():
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(
-                "📝 Send as Text",
-                callback_data="ai_summary_text"
-            ),
-            InlineKeyboardButton(
-                "📄 Send as PDF",
-                callback_data="ai_summary_pdf"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "❌ Cancel",
-                callback_data="ai_summarizer_cancel"
-            )
-        ]
-    ])
-
-
-def ai_summarizer_name_keyboard():
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(
-                "❌ Cancel",
-                callback_data="ai_summarizer_cancel"
-            )
-        ]
-    ])
 
 
 # GEMINI AI SUMMARIZATION
@@ -4702,7 +4424,7 @@ def main():
             QR_WAIT_TEXT: [
                 MessageHandler(
                     filters.Regex(r"(?i)^cancel$"),
-                    qr_cancel
+                    unlock_cancel
                 ),
                 MessageHandler(
                     filters.TEXT & ~filters.COMMAND,
@@ -4856,55 +4578,7 @@ def main():
         ],
     )
 
-    # Ask PDF
-    ask_pdf_handler = ConversationHandler(
-        entry_points=[
-            CallbackQueryHandler(
-                ask_pdf_start,
-                pattern="^ask_pdf$"
-            ),
-            MessageHandler(
-                filters.Regex("^📚 Ask PDF$"),
-                ask_pdf_start
-            )
-        ],
-        states={
-            ASK_PDF_WAIT: [
-                MessageHandler(
-                    filters.Document.ALL,
-                    ask_pdf_question
-                ),
-                MessageHandler(
-                    filters.TEXT & ~filters.COMMAND,
-                    ask_pdf_question
-                ),
-                CallbackQueryHandler(
-                    ask_pdf_cancel,
-                    pattern="^ask_pdf_cancel$"
-                ),
-            ]
-        },
-        fallbacks=[
-            CallbackQueryHandler(
-                ask_pdf_cancel,
-                pattern="^ask_pdf_cancel$"
-            ),
-            CommandHandler(
-                "cancel",
-                cancel
-            )
-        ],
-    )
-
-    # Register handlers
-    app.add_handler(protect_handler)
-    app.add_handler(merge_handler)
-    app.add_handler(extract_handler)
-    app.add_handler(summary_handler)
-    app.add_handler(ask_pdf_handler)
-
-
-    # Watermark
+# Watermark
     watermark_handler = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(
@@ -5345,12 +5019,6 @@ def main():
         CallbackQueryHandler(
             ai_summarizer_start,
             pattern="^ai_summarizer$"
-        )
-    )
-    app.add_handler(
-        CallbackQueryHandler(
-            ask_pdf_start,
-            pattern="^ask_pdf$"
         )
     )
 
