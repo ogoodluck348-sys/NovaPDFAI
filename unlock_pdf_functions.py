@@ -28,6 +28,24 @@ def unlock_main_menu_keyboard():
     ])
 
 
+async def remove_unlock_prompt_cancel(update, context):
+    message_id = context.user_data.get(
+        "unlock_prompt_message_id"
+    )
+
+    if not message_id:
+        return
+
+    try:
+        await context.bot.edit_message_reply_markup(
+            chat_id=update.effective_chat.id,
+            message_id=message_id,
+            reply_markup=None
+        )
+    except Exception:
+        pass
+
+
 async def unlock_start(update, context):
     query = update.callback_query
 
@@ -37,10 +55,7 @@ async def unlock_start(update, context):
     else:
         message = update.effective_message
 
-    context.user_data.pop("unlock_pdf_file", None)
-    context.user_data.pop("unlock_pdf_path", None)
-    context.user_data.pop("unlock_pdf_password", None)
-    context.user_data.pop("unlock_pdf_filename", None)
+    context.user_data.clear()
 
     await message.edit_text(
         "🔓 Unlock PDF\n\n"
@@ -54,57 +69,170 @@ async def unlock_start(update, context):
 
 
 async def unlock_receive_file(update, context):
-    document = update.message.document
+    await remove_unlock_prompt_cancel(
+        update,
+        context
+    )
 
-    if not document or not document.file_name.lower().endswith(".pdf"):
-        await update.message.reply_text(
-            "❌ Invalid file.\nPlease send a PDF file.",
+    document = update.effective_message.document
+
+    if not document or not document.file_name:
+        prompt = await update.effective_message.reply_text(
+            "❌ Invalid file.\n\n"
+            "Please send a PDF file.",
             reply_markup=unlock_cancel_keyboard()
         )
+
+        context.user_data["unlock_prompt_message_id"] = (
+            prompt.message_id
+        )
+
+        return UNLOCK_WAIT_FILE
+
+    if not document.file_name.lower().endswith(".pdf"):
+        prompt = await update.effective_message.reply_text(
+            "❌ Invalid file.\n\n"
+            "Please send a PDF file.",
+            reply_markup=unlock_cancel_keyboard()
+        )
+
+        context.user_data["unlock_prompt_message_id"] = (
+            prompt.message_id
+        )
+
         return UNLOCK_WAIT_FILE
 
     temp_dir = context.user_data.get("unlock_pdf_path")
 
     if not temp_dir:
-        temp_dir = tempfile.mkdtemp(prefix="nova_unlock_")
+        temp_dir = tempfile.mkdtemp(
+            prefix="nova_unlock_"
+        )
         context.user_data["unlock_pdf_path"] = temp_dir
 
-    file_path = os.path.join(temp_dir, document.file_name)
-
-    telegram_file = await document.get_file()
-    await telegram_file.download_to_drive(file_path)
-
-    context.user_data["unlock_pdf_file"] = file_path
-
-    await update.message.reply_text(
-        "🔑 <b>Enter the PDF password</b>\n\n"
-        "Send the password used to protect this PDF.",
-        parse_mode="HTML",
-        reply_markup=unlock_cancel_keyboard()
+    file_path = os.path.join(
+        temp_dir,
+        document.file_name
     )
 
-    return UNLOCK_WAIT_PASSWORD
+    try:
+        telegram_file = await document.get_file()
+        await telegram_file.download_to_drive(file_path)
+
+        from PyPDF2 import PdfReader
+
+        reader = PdfReader(file_path)
+
+        # Detect whether the PDF is actually encrypted.
+        if not reader.is_encrypted:
+            shutil.rmtree(
+                temp_dir,
+                ignore_errors=True
+            )
+
+            context.user_data.clear()
+
+            await update.effective_message.reply_text(
+                "🔓 This PDF is not password-protected.\n\n"
+                "No password is required.",
+                reply_markup=unlock_main_menu_keyboard()
+            )
+
+            return ConversationHandler.END
+
+        context.user_data["unlock_pdf_file"] = file_path
+
+        prompt = await update.effective_message.reply_text(
+            "🔑 <b>Enter the PDF password</b>\n\n"
+            "Send the password used to protect this PDF.",
+            parse_mode="HTML",
+            reply_markup=unlock_cancel_keyboard()
+        )
+
+        context.user_data["unlock_prompt_message_id"] = (
+            prompt.message_id
+        )
+
+        return UNLOCK_WAIT_PASSWORD
+
+    except Exception as e:
+        logger = getattr(
+            context,
+            "application",
+            None
+        )
+
+        if logger:
+            try:
+                logger.logger.error(
+                    f"Unlock PDF validation error: {e}"
+                )
+            except Exception:
+                pass
+
+        prompt = await update.effective_message.reply_text(
+            "❌ This doesn't appear to be a valid PDF.\n\n"
+            "Please send a valid PDF file.",
+            reply_markup=unlock_cancel_keyboard()
+        )
+
+        context.user_data["unlock_prompt_message_id"] = (
+            prompt.message_id
+        )
+
+        if temp_dir and os.path.exists(temp_dir):
+            shutil.rmtree(
+                temp_dir,
+                ignore_errors=True
+            )
+
+        context.user_data.pop(
+            "unlock_pdf_file",
+            None
+        )
+        context.user_data.pop(
+            "unlock_pdf_path",
+            None
+        )
+
+        return UNLOCK_WAIT_FILE
 
 
 async def unlock_receive_password(update, context):
-    password = update.message.text
+    await remove_unlock_prompt_cancel(
+        update,
+        context
+    )
 
-    if not password:
-        await update.message.reply_text(
+    password = update.effective_message.text
+
+    if not password or not password.strip():
+        prompt = await update.effective_message.reply_text(
             "❌ Please enter the PDF password.",
             reply_markup=unlock_cancel_keyboard()
         )
+
+        context.user_data["unlock_prompt_message_id"] = (
+            prompt.message_id
+        )
+
         return UNLOCK_WAIT_PASSWORD
 
-    context.user_data["unlock_pdf_password"] = password
-
-    pdf_path = context.user_data.get("unlock_pdf_file")
+    pdf_path = context.user_data.get(
+        "unlock_pdf_file"
+    )
 
     if not pdf_path or not os.path.exists(pdf_path):
-        await update.message.reply_text(
-            "❌ PDF file not found. Please start again.",
+        prompt = await update.effective_message.reply_text(
+            "❌ PDF file not found.\n\n"
+            "Please send the PDF again.",
             reply_markup=unlock_cancel_keyboard()
         )
+
+        context.user_data["unlock_prompt_message_id"] = (
+            prompt.message_id
+        )
+
         return UNLOCK_WAIT_FILE
 
     try:
@@ -112,16 +240,41 @@ async def unlock_receive_password(update, context):
 
         reader = PdfReader(pdf_path)
 
-        if reader.is_encrypted:
-            result = reader.decrypt(password)
+        if not reader.is_encrypted:
+            temp_dir = context.user_data.get(
+                "unlock_pdf_path"
+            )
 
-            if result == 0:
-                await update.message.reply_text(
-                    "❌ Incorrect password.\n\n"
-                    "Please try again.",
-                    reply_markup=unlock_cancel_keyboard()
+            if temp_dir:
+                shutil.rmtree(
+                    temp_dir,
+                    ignore_errors=True
                 )
-                return UNLOCK_WAIT_PASSWORD
+
+            context.user_data.clear()
+
+            await update.effective_message.reply_text(
+                "🔓 This PDF is not password-protected.\n\n"
+                "No password is required.",
+                reply_markup=unlock_main_menu_keyboard()
+            )
+
+            return ConversationHandler.END
+
+        result = reader.decrypt(password)
+
+        if result == 0:
+            prompt = await update.effective_message.reply_text(
+                "❌ Incorrect password.\n\n"
+                "Please try again.",
+                reply_markup=unlock_cancel_keyboard()
+            )
+
+            context.user_data["unlock_prompt_message_id"] = (
+                prompt.message_id
+            )
+
+            return UNLOCK_WAIT_PASSWORD
 
         writer = PdfWriter()
 
@@ -133,12 +286,15 @@ async def unlock_receive_password(update, context):
             "unlocked.pdf"
         )
 
-        with open(unlocked_path, "wb") as output:
+        with open(
+            unlocked_path,
+            "wb"
+        ) as output:
             writer.write(output)
 
         context.user_data["unlock_pdf_file"] = unlocked_path
 
-        await update.message.reply_text(
+        prompt = await update.effective_message.reply_text(
             "✅ PDF unlocked successfully!\n\n"
             "Now enter the name for the unlocked PDF.\n\n"
             "Example: <code>My Document</code>",
@@ -146,77 +302,123 @@ async def unlock_receive_password(update, context):
             reply_markup=unlock_cancel_keyboard()
         )
 
+        context.user_data["unlock_prompt_message_id"] = (
+            prompt.message_id
+        )
+
         return UNLOCK_WAIT_NAME
 
-    except Exception as e:
-        await update.message.reply_text(
-            f"❌ Could not unlock this PDF.\n\n"
-            f"Error: {e}",
+    except Exception:
+        prompt = await update.effective_message.reply_text(
+            "❌ Could not unlock this PDF with that password.\n\n"
+            "Please check the password and try again.",
             reply_markup=unlock_cancel_keyboard()
         )
+
+        context.user_data["unlock_prompt_message_id"] = (
+            prompt.message_id
+        )
+
         return UNLOCK_WAIT_PASSWORD
 
 
 async def unlock_receive_name(update, context):
-    name = update.message.text.strip()
+    await remove_unlock_prompt_cancel(
+        update,
+        context
+    )
+
+    name = update.effective_message.text.strip()
 
     if not name:
-        await update.message.reply_text(
+        prompt = await update.effective_message.reply_text(
             "❌ Please enter a filename.",
             reply_markup=unlock_cancel_keyboard()
         )
+
+        context.user_data["unlock_prompt_message_id"] = (
+            prompt.message_id
+        )
+
         return UNLOCK_WAIT_NAME
 
-    safe_name = Path(name).stem
+    safe_name = "".join(
+        c for c in Path(name).stem
+        if c.isalnum() or c in " -_()"
+    ).strip()
 
     if not safe_name:
-        await update.message.reply_text(
-            "❌ Invalid filename. Try another name.",
+        prompt = await update.effective_message.reply_text(
+            "❌ Invalid filename.\n\n"
+            "Please enter another name.",
             reply_markup=unlock_cancel_keyboard()
         )
+
+        context.user_data["unlock_prompt_message_id"] = (
+            prompt.message_id
+        )
+
         return UNLOCK_WAIT_NAME
 
-    output_path = context.user_data.get("unlock_pdf_file")
+    output_path = context.user_data.get(
+        "unlock_pdf_file"
+    )
 
     if not output_path or not os.path.exists(output_path):
-        await update.message.reply_text(
-            "❌ Unlocked PDF not found. Please start again.",
+        prompt = await update.effective_message.reply_text(
+            "❌ Unlocked PDF not found.\n\n"
+            "Please start again.",
             reply_markup=unlock_cancel_keyboard()
         )
-        return ConversationHandler.END
+
+        context.user_data["unlock_prompt_message_id"] = (
+            prompt.message_id
+        )
+
+        return UNLOCK_WAIT_FILE
 
     final_path = os.path.join(
         context.user_data["unlock_pdf_path"],
         f"{safe_name}.pdf"
     )
 
-    shutil.copy2(output_path, final_path)
+    shutil.copy2(
+        output_path,
+        final_path
+    )
 
     try:
-        await update.message.reply_document(
+        await update.effective_message.reply_document(
             document=final_path,
             filename=f"{safe_name}.pdf",
             caption="🔓 PDF unlocked successfully!",
             reply_markup=unlock_main_menu_keyboard()
         )
 
-        temp_dir = context.user_data.get("unlock_pdf_path")
+        temp_dir = context.user_data.get(
+            "unlock_pdf_path"
+        )
 
         if temp_dir:
-            shutil.rmtree(temp_dir, ignore_errors=True)
+            shutil.rmtree(
+                temp_dir,
+                ignore_errors=True
+            )
 
-        context.user_data.pop("unlock_pdf_file", None)
-        context.user_data.pop("unlock_pdf_path", None)
-        context.user_data.pop("unlock_pdf_password", None)
-        context.user_data.pop("unlock_pdf_filename", None)
+        context.user_data.clear()
 
         return ConversationHandler.END
 
-    except Exception as e:
-        await update.message.reply_text(
-            f"❌ Failed to send the unlocked PDF.\n\nError: {e}",
+    except Exception:
+        prompt = await update.effective_message.reply_text(
+            "❌ Failed to send the unlocked PDF.",
             reply_markup=unlock_cancel_keyboard()
         )
+
+        context.user_data["unlock_prompt_message_id"] = (
+            prompt.message_id
+        )
+
         return UNLOCK_WAIT_NAME
 
 
@@ -224,10 +426,15 @@ async def unlock_cancel(update, context):
     query = update.callback_query
     await query.answer()
 
-    temp_dir = context.user_data.get("unlock_pdf_path")
+    temp_dir = context.user_data.get(
+        "unlock_pdf_path"
+    )
 
     if temp_dir and os.path.exists(temp_dir):
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        shutil.rmtree(
+            temp_dir,
+            ignore_errors=True
+        )
 
     context.user_data.clear()
 
