@@ -30,11 +30,15 @@ from reportlab.lib.colors import Color
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
-DEJAVU_FONT = "/data/data/com.termux/files/usr/share/fonts/TTF/DejaVuSans.ttf"
-DEJAVU_BOLD_FONT = "/data/data/com.termux/files/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"
+DEJAVU_FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+DEJAVU_BOLD_FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
-pdfmetrics.registerFont(TTFont("DejaVuSans", DEJAVU_FONT))
-pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", DEJAVU_BOLD_FONT))
+if os.path.exists(DEJAVU_FONT) and os.path.exists(DEJAVU_BOLD_FONT):
+    pdfmetrics.registerFont(TTFont("DejaVuSans", DEJAVU_FONT))
+    pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", DEJAVU_BOLD_FONT))
+else:
+    DEJAVU_FONT = None
+    DEJAVU_BOLD_FONT = None
 
 
 # =========================
@@ -1950,26 +1954,26 @@ async def ai_summarizer_receive_name(update, context):
         styles = getSampleStyleSheet()
 
         title_style = styles["Title"].clone("NovaTitle")
-        title_style.fontName = "DejaVuSans-Bold"
+        title_style.fontName = "DejaVuSans-Bold" if DEJAVU_BOLD_FONT else "Helvetica-Bold"
         title_style.fontSize = 20
         title_style.leading = 25
         title_style.spaceAfter = 16
 
         heading_style = styles["Heading2"].clone("NovaHeading")
-        heading_style.fontName = "DejaVuSans-Bold"
+        heading_style.fontName = "DejaVuSans-Bold" if DEJAVU_BOLD_FONT else "Helvetica-Bold"
         heading_style.fontSize = 14
         heading_style.leading = 19
         heading_style.spaceBefore = 12
         heading_style.spaceAfter = 7
 
         body_style = styles["BodyText"].clone("NovaBody")
-        body_style.fontName = "DejaVuSans"
+        body_style.fontName = "DejaVuSans" if DEJAVU_FONT else "Helvetica"
         body_style.fontSize = 10.5
         body_style.leading = 16
         body_style.spaceAfter = 8
 
         bullet_style = styles["BodyText"].clone("NovaBullet")
-        bullet_style.fontName = "DejaVuSans"
+        bullet_style.fontName = "DejaVuSans" if DEJAVU_FONT else "Helvetica"
         bullet_style.fontSize = 10.5
         bullet_style.leading = 16
         bullet_style.leftIndent = 18
