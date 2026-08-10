@@ -1947,6 +1947,53 @@ async def ask_pdf_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
+# =========================
+# AI SUMMARIZER KEYBOARDS
+# =========================
+
+def ai_summarizer_input_keyboard():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "❌ Cancel",
+                callback_data="ai_summarizer_cancel"
+            )
+        ]
+    ])
+
+
+def ai_summarizer_output_keyboard():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "📝 Send as Text",
+                callback_data="ai_summary_text"
+            ),
+            InlineKeyboardButton(
+                "📄 Send as PDF",
+                callback_data="ai_summary_pdf"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "❌ Cancel",
+                callback_data="ai_summarizer_cancel"
+            )
+        ]
+    ])
+
+
+def ai_summarizer_name_keyboard():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "❌ Cancel",
+                callback_data="ai_summarizer_cancel"
+            )
+        ]
+    ])
+
+
 # GEMINI AI SUMMARIZATION
 # =========================
 
