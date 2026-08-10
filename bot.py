@@ -4049,7 +4049,7 @@ def main():
     ai_summarizer_handler = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(
-                ai_summarizer_start,
+                summarize_start,
                 pattern="^ai_summarizer$"
             )
         ],
