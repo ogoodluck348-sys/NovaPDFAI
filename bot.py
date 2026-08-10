@@ -1131,9 +1131,73 @@ async def text_to_pdf_receive(
         )
         return TEXT_TO_PDF_WAIT_TEXT
 
-    context.user_data["pdf_text"] = text
+    existing_text = context.user_data.get(
+        "pdf_text",
+        ""
+    )
+
+    if existing_text:
+        context.user_data["pdf_text"] = (
+            existing_text + "\n" + text
+        )
+    else:
+        context.user_data["pdf_text"] = text
 
     prompt = await update.effective_message.reply_text(
+        "✅ Text received.\n\n"
+        "You can send more text if needed.\n"
+        "When you are finished, tap **Done**.",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "✅ Done",
+                    callback_data="textpdf_text_done"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "❌ Cancel",
+                    callback_data="texttopdf_cancel"
+                )
+            ]
+        ])
+    )
+
+    context.user_data["text_pdf_prompt_message_id"] = (
+        prompt.message_id
+    )
+
+    return TEXT_TO_PDF_WAIT_TEXT
+
+
+async def text_to_pdf_text_done(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    await query.answer()
+
+    text = context.user_data.get(
+        "pdf_text",
+        ""
+    )
+
+    if not text.strip():
+        await query.message.edit_text(
+            "❌ Please send some text first.",
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        "❌ Cancel",
+                        callback_data="texttopdf_cancel"
+                    )
+                ]
+            ])
+        )
+        return TEXT_TO_PDF_WAIT_TEXT
+
+    await query.message.edit_text(
         "📄 What would you like to name your PDF?\n\n"
         "Example: Biology Notes\n\n"
         "You don't need to type .pdf",
@@ -1147,7 +1211,9 @@ async def text_to_pdf_receive(
         ])
     )
 
-    context.user_data["text_pdf_prompt_message_id"] = prompt.message_id
+    context.user_data["text_pdf_prompt_message_id"] = (
+        query.message.message_id
+    )
 
     return TEXT_TO_PDF_WAIT_NAME
 
@@ -4361,6 +4427,10 @@ def main():
                 MessageHandler(
                     filters.TEXT & ~filters.COMMAND,
                     text_to_pdf_receive
+                ),
+                CallbackQueryHandler(
+                    text_to_pdf_text_done,
+                    pattern="^textpdf_text_done$"
                 ),
                 CallbackQueryHandler(
                     text_to_pdf_cancel,
