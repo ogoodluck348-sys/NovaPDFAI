@@ -1737,7 +1737,7 @@ def ai_summarizer_output_keyboard():
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📱 Send as Text", callback_data="ai_summary_text"),
-            InlineKeyboardButton("📄 Send as PDF", callback_data="ai_summary_pdf")
+            InlineKeyboardButton("📄 Send as PDF (Recommended)", callback_data="ai_summary_pdf")
         ],
         [
             InlineKeyboardButton("❌ Cancel", callback_data="ai_summarizer_cancel")
