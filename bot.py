@@ -4702,7 +4702,7 @@ def main():
             QR_WAIT_TEXT: [
                 MessageHandler(
                     filters.Regex(r"(?i)^cancel$"),
-                    unlock_cancel
+                    qr_cancel
                 ),
                 MessageHandler(
                     filters.TEXT & ~filters.COMMAND,
