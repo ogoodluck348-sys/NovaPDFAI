@@ -82,6 +82,9 @@ IMAGES_WAIT_FORMAT = 17
 COMPRESS_WAIT_FILE = 18
 COMPRESS_WAIT_NAME = 19
 COMPRESS_WAIT_LEVEL = 20
+AI_SUMMARIZER_WAIT_INPUT = 28
+AI_SUMMARIZER_WAIT_OUTPUT = 29
+AI_SUMMARIZER_WAIT_NAME = 30
 
 
 
@@ -152,6 +155,7 @@ def main_keyboard():
             InlineKeyboardButton("📱 QR Code Generator", callback_data="qr_code")
         ],
         [
+            InlineKeyboardButton("🧠 AI Summarizer", callback_data="ai_summarizer"),
             InlineKeyboardButton("➕ More", callback_data="more")
         ]
     ]
@@ -1706,6 +1710,328 @@ async def extract_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return ConversationHandler.END
 # =========================
+# =========================
+# AI TOPIC SUMMARIZER
+# =========================
+
+def ai_summarizer_input_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Cancel", callback_data="ai_summarizer_cancel")]
+    ])
+
+
+def ai_summarizer_output_keyboard():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📱 Send as Text", callback_data="ai_summary_text"),
+            InlineKeyboardButton("📄 Send as PDF", callback_data="ai_summary_pdf")
+        ],
+        [
+            InlineKeyboardButton("❌ Cancel", callback_data="ai_summarizer_cancel")
+        ]
+    ])
+
+
+def ai_summarizer_name_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Cancel", callback_data="ai_summarizer_cancel")]
+    ])
+
+
+async def ai_summarizer_start(update, context):
+    query = update.callback_query
+
+    if query:
+        await query.answer()
+        message = query.message
+        await message.edit_text(
+            "🧠 <b>AI Summarizer</b>\n\n"
+            "Send me any topic, text, notes, or information "
+            "you want Nova AI to summarize.\n\n"
+            "Example:\n"
+            "<i>Photosynthesis and its stages</i>",
+            parse_mode="HTML",
+            reply_markup=ai_summarizer_input_keyboard()
+        )
+    else:
+        message = await update.effective_message.reply_text(
+            "🧠 <b>AI Summarizer</b>\n\n"
+            "Send me any topic, text, notes, or information "
+            "you want Nova AI to summarize.\n\n"
+            "Example:\n"
+            "<i>Photosynthesis and its stages</i>",
+            parse_mode="HTML",
+            reply_markup=ai_summarizer_input_keyboard()
+        )
+
+    context.user_data["ai_summarizer_prompt_message_id"] = message.message_id
+
+    return AI_SUMMARIZER_WAIT_INPUT
+
+
+async def ai_summarizer_receive(update, context):
+    text = update.effective_message.text
+
+    if not text or not text.strip():
+        await update.effective_message.reply_text(
+            "❌ Please send a topic or some text to summarize.",
+            reply_markup=ai_summarizer_input_keyboard()
+        )
+        return AI_SUMMARIZER_WAIT_INPUT
+
+    prompt_message_id = context.user_data.get(
+        "ai_summarizer_prompt_message_id"
+    )
+
+    if prompt_message_id:
+        try:
+            await context.bot.edit_message_reply_markup(
+                chat_id=update.effective_chat.id,
+                message_id=prompt_message_id,
+                reply_markup=None
+            )
+        except Exception:
+            pass
+
+    context.user_data["ai_summarizer_input"] = text.strip()
+
+    await update.effective_message.reply_text(
+        "⏳ <b>Nova AI is summarizing...</b>\n\n"
+        "🤖 Please wait.",
+        parse_mode="HTML"
+    )
+
+    summary = await gemini_summarize(text.strip())
+
+    if not summary:
+        context.user_data.clear()
+
+        await update.effective_message.reply_text(
+            "❌ Nova AI couldn't generate a summary right now.",
+            reply_markup=main_menu_button()
+        )
+
+        return ConversationHandler.END
+
+    context.user_data["ai_summarizer_summary"] = summary
+
+    await update.effective_message.reply_text(
+        "✅ <b>Summary generated!</b>\n\n"
+        "How would you like to receive it?",
+        parse_mode="HTML",
+        reply_markup=ai_summarizer_output_keyboard()
+    )
+
+    return AI_SUMMARIZER_WAIT_OUTPUT
+
+
+async def ai_summarizer_send_text(update, context):
+    query = update.callback_query
+    await query.answer()
+
+    summary = context.user_data.get("ai_summarizer_summary")
+
+    if not summary:
+        context.user_data.clear()
+
+        await query.message.edit_text(
+            "❌ Your summary session expired.",
+            reply_markup=main_keyboard()
+        )
+
+        return ConversationHandler.END
+
+    await query.message.edit_text("📝 <b>Nova AI Summary</b>", parse_mode="HTML")
+
+    chunk_size = 3500
+
+    for start in range(0, len(summary), chunk_size):
+        chunk = summary[start:start + chunk_size].strip()
+
+        if chunk:
+            is_last = start + chunk_size >= len(summary)
+
+            await query.message.reply_text(
+                chunk,
+                reply_markup=main_menu_button() if is_last else None
+            )
+
+    context.user_data.clear()
+
+    return ConversationHandler.END
+
+
+async def ai_summarizer_pdf(update, context):
+    query = update.callback_query
+    await query.answer()
+
+    if not context.user_data.get("ai_summarizer_summary"):
+        context.user_data.clear()
+
+        await query.message.edit_text(
+            "❌ Your summary session expired.",
+            reply_markup=main_keyboard()
+        )
+
+        return ConversationHandler.END
+
+    await query.message.edit_text(
+        "📄 <b>PDF output selected.</b>\n\n"
+        "📝 Enter the name you want for the PDF.\n\n"
+        "Example: Photosynthesis Summary",
+        parse_mode="HTML",
+        reply_markup=ai_summarizer_name_keyboard()
+    )
+
+    context.user_data["ai_summarizer_name_prompt_message_id"] = (
+        query.message.message_id
+    )
+
+    return AI_SUMMARIZER_WAIT_NAME
+
+
+async def ai_summarizer_receive_name(update, context):
+    prompt_message_id = context.user_data.get(
+        "ai_summarizer_name_prompt_message_id"
+    )
+
+    if prompt_message_id:
+        try:
+            await context.bot.edit_message_reply_markup(
+                chat_id=update.effective_chat.id,
+                message_id=prompt_message_id,
+                reply_markup=None
+            )
+        except Exception:
+            pass
+
+    name = update.effective_message.text.strip()
+
+    if not name:
+        await update.effective_message.reply_text(
+            "❌ Please enter a valid PDF name.",
+            reply_markup=ai_summarizer_name_keyboard()
+        )
+        return AI_SUMMARIZER_WAIT_NAME
+
+    name = name.replace("/", "_").replace("\\", "_")
+
+    if not name.lower().endswith(".pdf"):
+        name += ".pdf"
+
+    summary = context.user_data.get("ai_summarizer_summary")
+
+    if not summary:
+        context.user_data.clear()
+
+        await update.effective_message.reply_text(
+            "❌ Your summary session expired.",
+            reply_markup=main_menu_button()
+        )
+
+        return ConversationHandler.END
+
+    temp_dir = tempfile.mkdtemp(prefix="nova_ai_summary_")
+    output_path = os.path.join(temp_dir, name)
+
+    try:
+        await update.effective_message.reply_text(
+            "⏳ Creating your summary PDF..."
+        )
+
+        pdf = canvas.Canvas(output_path)
+        pdf.setTitle(name[:-4])
+
+        width, height = 595, 842
+        left_margin = 45
+        right_margin = 45
+        top_margin = 50
+        bottom_margin = 50
+        y = height - top_margin
+
+        pdf.setFont("Helvetica-Bold", 16)
+        pdf.drawString(left_margin, y, "NovaPDF AI — Summary")
+        y -= 30
+
+        pdf.setFont("Helvetica", 10)
+        text_object = pdf.beginText(
+            left_margin,
+            y
+        )
+        text_object.setLeading(14)
+
+        max_chars = 90
+
+        for paragraph in summary.splitlines():
+            line = paragraph.strip()
+
+            if not line:
+                text_object.textLine("")
+                continue
+
+            while len(line) > max_chars:
+                split_at = line.rfind(" ", 0, max_chars)
+
+                if split_at <= 0:
+                    split_at = max_chars
+
+                text_object.textLine(line[:split_at])
+                line = line[split_at:].strip()
+
+                if text_object.getY() <= bottom_margin:
+                    pdf.drawText(text_object)
+                    pdf.showPage()
+                    text_object = pdf.beginText(left_margin, height - top_margin)
+                    text_object.setLeading(14)
+
+            text_object.textLine(line)
+
+            if text_object.getY() <= bottom_margin:
+                pdf.drawText(text_object)
+                pdf.showPage()
+                text_object = pdf.beginText(left_margin, height - top_margin)
+                text_object.setLeading(14)
+
+        pdf.drawText(text_object)
+        pdf.save()
+
+        with open(output_path, "rb") as pdf_file:
+            await update.effective_message.reply_document(
+                document=pdf_file,
+                filename=name,
+                caption="📄 Your Nova AI summary.",
+                reply_markup=main_menu_button()
+            )
+
+    except Exception as e:
+        logger.error(f"AI summary PDF error: {e}")
+
+        await update.effective_message.reply_text(
+            "❌ Failed to create the summary PDF.",
+            reply_markup=main_menu_button()
+        )
+
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        context.user_data.clear()
+
+    return ConversationHandler.END
+
+
+async def ai_summarizer_cancel(update, context):
+    query = update.callback_query
+    await query.answer()
+
+    context.user_data.clear()
+
+    await query.message.edit_text(
+        "🏠 NovaPDF AI\n\nChoose a tool:",
+        reply_markup=main_keyboard()
+    )
+
+    return ConversationHandler.END
+
+
 # GEMINI AI SUMMARIZATION
 # =========================
 
@@ -3936,6 +4262,64 @@ def main():
     )
 
     app.add_handler(unlock_handler)
+
+    # AI Topic Summarizer
+    ai_summarizer_handler = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(
+                ai_summarizer_start,
+                pattern="^ai_summarizer$"
+            )
+        ],
+        states={
+            AI_SUMMARIZER_WAIT_INPUT: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    ai_summarizer_receive
+                ),
+                CallbackQueryHandler(
+                    ai_summarizer_cancel,
+                    pattern="^ai_summarizer_cancel$"
+                )
+            ],
+            AI_SUMMARIZER_WAIT_OUTPUT: [
+                CallbackQueryHandler(
+                    ai_summarizer_send_text,
+                    pattern="^ai_summary_text$"
+                ),
+                CallbackQueryHandler(
+                    ai_summarizer_pdf,
+                    pattern="^ai_summary_pdf$"
+                ),
+                CallbackQueryHandler(
+                    ai_summarizer_cancel,
+                    pattern="^ai_summarizer_cancel$"
+                )
+            ],
+            AI_SUMMARIZER_WAIT_NAME: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    ai_summarizer_receive_name
+                ),
+                CallbackQueryHandler(
+                    ai_summarizer_cancel,
+                    pattern="^ai_summarizer_cancel$"
+                )
+            ]
+        },
+        fallbacks=[
+            CallbackQueryHandler(
+                ai_summarizer_cancel,
+                pattern="^ai_summarizer_cancel$"
+            ),
+            CommandHandler(
+                "cancel",
+                cancel
+            )
+        ]
+    )
+
+    app.add_handler(ai_summarizer_handler)
 
     # QR Code Generator
     qr_code_handler = ConversationHandler(
