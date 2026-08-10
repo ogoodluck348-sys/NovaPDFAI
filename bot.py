@@ -2271,6 +2271,117 @@ async def images_to_pdf_cancel(update: Update, context: ContextTypes.DEFAULT_TYP
     return ConversationHandler.END
 
 
+
+# =========================
+# AI ANSWER FORMATTING
+# =========================
+
+def format_ai_answer(text):
+    """Clean Gemini output for neat Telegram display."""
+
+    if not text:
+        return ""
+
+    text = str(text)
+
+    # Remove invisible/control characters.
+    text = text.replace("\x00", "")
+    text = re.sub(r"[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]", "", text)
+
+    # Normalize line endings.
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # Remove Markdown headings.
+    text = re.sub(r"^\s*#{1,6}\s*", "", text, flags=re.MULTILINE)
+
+    # Convert bold/italic Markdown to plain Telegram-friendly text.
+    text = text.replace("***", "")
+    text = text.replace("**", "")
+    text = text.replace("__", "")
+    text = re.sub(r"(?<!\w)\*([^*\n]+)\*(?!\w)", r"\1", text)
+
+    # Convert Markdown bullets to clean Telegram bullets.
+    text = re.sub(r"^\s*[-*+]\s+", "• ", text, flags=re.MULTILINE)
+
+    # Remove excessive spaces while preserving indentation reasonably.
+    text = re.sub(r"[ \t]+", " ", text)
+
+    # Remove spaces at the beginning of lines.
+    text = re.sub(r"^[ \t]+", "", text, flags=re.MULTILINE)
+
+    # Make numbered lists consistent.
+    text = re.sub(
+        r"^\s*(\d+)[.)]\s*",
+        r"\1. ",
+        text,
+        flags=re.MULTILINE
+    )
+
+    # Remove spaces immediately before punctuation.
+    text = re.sub(r"\s+([,.;:!?])", r"\1", text)
+
+    # Avoid ugly repeated punctuation.
+    text = re.sub(r"[ \t]*([•])\s*", r"\1 ", text)
+
+    # Collapse excessive blank lines.
+    text = re.sub(r"\n[ \t]*\n[ \t]*\n+", "\n\n", text)
+
+    # Clean spaces around blank lines.
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n[ \t]+", "\n", text)
+
+    # Remove accidental leading/trailing punctuation noise.
+    text = text.strip(" \n")
+
+    return text
+
+
+def split_ai_answer(text, max_length=3500):
+    """Split AI answers at safe paragraph/sentence boundaries."""
+
+    text = format_ai_answer(text)
+
+    if len(text) <= max_length:
+        return [text] if text else []
+
+    chunks = []
+    remaining = text.strip()
+
+    while len(remaining) > max_length:
+        candidate = remaining[:max_length]
+
+        # Prefer paragraph boundary.
+        cut = candidate.rfind("\n\n")
+
+        # Then line boundary.
+        if cut < int(max_length * 0.55):
+            cut = candidate.rfind("\n")
+
+        # Then sentence boundary.
+        if cut < int(max_length * 0.55):
+            matches = list(re.finditer(r"[.!?](?=\s|$)", candidate))
+            if matches:
+                cut = matches[-1].end()
+
+        # Last-resort word boundary.
+        if cut < int(max_length * 0.55):
+            cut = candidate.rfind(" ")
+
+        if cut <= 0:
+            cut = max_length
+
+        chunk = remaining[:cut].strip()
+        remaining = remaining[cut:].strip()
+
+        if chunk:
+            chunks.append(chunk)
+
+    if remaining:
+        chunks.append(remaining)
+
+    return chunks
+
+
 # =========================
 # ASK PDF
 # =========================
@@ -2497,6 +2608,23 @@ PDF CONTENT:
 
 RECENT CONVERSATION:
 {history_text}
+
+
+FORMAT YOUR ANSWER CLEANLY FOR TELEGRAM:
+
+- Use short paragraphs.
+- Use clear headings without Markdown heading symbols.
+- Use numbered lists for steps or processes.
+- Use the bullet symbol • for bullet points.
+- Leave a blank line between major sections.
+- Keep paragraphs short and easy to read on a phone.
+- Do not use Markdown tables.
+- Do not use excessive symbols, emojis, or decorative characters.
+- Do not repeat the question unnecessarily.
+- Give a direct answer first, then explain where useful.
+- Never begin in the middle of a sentence.
+- Do not add "###", "**", "__", or similar Markdown formatting.
+- Keep the formatting simple and professional.
 
 USER QUESTION:
 {question.strip()}
