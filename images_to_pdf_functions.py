@@ -51,6 +51,7 @@ async def images_to_pdf_start(update, context):
             parse_mode="HTML",
             reply_markup=images_to_pdf_done_keyboard()
         )
+        context.user_data["images_to_pdf_prompt_message_id"] = message.message_id
     else:
         await update.effective_message.reply_text(
             "🖼️ <b>Images → PDF</b>\n\n"
@@ -102,6 +103,18 @@ async def images_to_pdf_receive_image(update, context):
 
     files.append(str(path))
     context.user_data["images_to_pdf_files"] = files
+
+    prompt_message_id = context.user_data.get("images_to_pdf_prompt_message_id")
+
+    if prompt_message_id:
+        try:
+            await context.bot.edit_message_reply_markup(
+                chat_id=update.effective_chat.id,
+                message_id=prompt_message_id,
+                reply_markup=None
+            )
+        except Exception:
+            pass
 
     await message.reply_text(
         f"✅ Image {number} received.\n\n"
