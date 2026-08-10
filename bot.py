@@ -4134,14 +4134,14 @@ def main():
                     pattern="^qr_generate$"
                 ),
                 CallbackQueryHandler(
-                    qr_cancel_main_menu,
+                    qr_cancel,
                     pattern="^qr_cancel$"
                 )
             ]
         },
         fallbacks=[
             CallbackQueryHandler(
-                qr_cancel_main_menu,
+                qr_cancel,
                 pattern="^qr_cancel$"
             ),
             CallbackQueryHandler(
