@@ -116,13 +116,17 @@ async def images_to_pdf_receive_image(update, context):
         except Exception:
             pass
 
-    await message.reply_text(
+    confirmation_message = await message.reply_text(
         f"✅ Image {number} received.\n\n"
         f"🖼️ Total images: {number}\n\n"
         "Send another image or tap "
         "<b>Done — Create PDF</b>.",
         parse_mode="HTML",
         reply_markup=images_to_pdf_done_keyboard()
+    )
+
+    context.user_data["images_to_pdf_prompt_message_id"] = (
+        confirmation_message.message_id
     )
 
     return IMG_PDF_WAIT_IMAGES
