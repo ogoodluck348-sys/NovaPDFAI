@@ -17,38 +17,13 @@ from telegram.ext import ConversationHandler
 QR_WAIT_TEXT = 26
 
 
-
-
-def qr_main_menu_keyboard():
+def main_menu_button():
     return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("🔗 Merge PDF", callback_data="merge"),
-            InlineKeyboardButton("🔒 Protect PDF", callback_data="protect")
-        ],
-        [
-            InlineKeyboardButton("📄 Extract PDF Text", callback_data="extract"),
-            InlineKeyboardButton("📝 Summarize PDF", callback_data="summarize")
-        ],
-        [
-            InlineKeyboardButton("💧 Watermark", callback_data="watermark"),
-            InlineKeyboardButton("🔄 Rotate PDF", callback_data="rotate")
-        ],
-        [
-            InlineKeyboardButton("🖼️ PDF to Images", callback_data="images"),
-            InlineKeyboardButton("📉 Compress PDF", callback_data="compress")
-        ],
-        [
-            InlineKeyboardButton("🖼️ Images → PDF", callback_data="images_to_pdf"),
-            InlineKeyboardButton("🔓 Unlock PDF", callback_data="unlock")
-        ],
-        [
-            InlineKeyboardButton("📝 Text to PDF", callback_data="texttopdf"),
-            InlineKeyboardButton("📱 QR Code Generator", callback_data="qr_code")
-        ],
-        [
-            InlineKeyboardButton("➕ More", callback_data="more")
-        ]
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_menu")]
     ])
+
+
+
 
 def qr_cancel_keyboard():
     return InlineKeyboardMarkup([
@@ -56,17 +31,6 @@ def qr_cancel_keyboard():
             InlineKeyboardButton(
                 "❌ Cancel",
                 callback_data="qr_cancel"
-            )
-        ]
-    ])
-
-
-def qr_result_keyboard():
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(
-                "🏠 Main Menu",
-                callback_data="main_menu"
             )
         ]
     ])
@@ -401,7 +365,7 @@ async def qr_generate_callback(update, context):
         await query.message.reply_photo(
             photo=qr_path,
             caption="📱 QR Code generated successfully!",
-            reply_markup=qr_result_keyboard()
+            reply_markup=main_menu_button()
         )
 
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -434,7 +398,7 @@ async def qr_cancel(update, context):
 
     await query.message.edit_text(
         "🏠 NovaPDF AI\\n\\nChoose a tool:",
-        reply_markup=qr_main_menu_keyboard()
+        reply_markup=main_menu_button()
     )
 
     return ConversationHandler.END

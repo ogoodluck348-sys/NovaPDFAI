@@ -11,52 +11,15 @@ UNLOCK_WAIT_PASSWORD = 24
 UNLOCK_WAIT_NAME = 25
 
 
+def main_menu_button():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="main_menu")]
+    ])
+
+
 def unlock_cancel_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("❌ Cancel", callback_data="unlock_cancel")]
-    ])
-
-
-def unlock_result_keyboard():
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(
-                "🏠 Main Menu",
-                callback_data="main_menu"
-            )
-        ]
-    ])
-
-
-def unlock_main_menu_keyboard():
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("🔗 Merge PDF", callback_data="merge"),
-            InlineKeyboardButton("🔒 Protect PDF", callback_data="protect")
-        ],
-        [
-            InlineKeyboardButton("📄 Extract PDF Text", callback_data="extract"),
-            InlineKeyboardButton("📝 Summarize PDF", callback_data="summarize")
-        ],
-        [
-            InlineKeyboardButton("💧 Watermark", callback_data="watermark"),
-            InlineKeyboardButton("🔄 Rotate PDF", callback_data="rotate")
-        ],
-        [
-            InlineKeyboardButton("🖼️ PDF to Images", callback_data="images"),
-            InlineKeyboardButton("📉 Compress PDF", callback_data="compress")
-        ],
-        [
-            InlineKeyboardButton("🖼️ Images → PDF", callback_data="images_to_pdf"),
-            InlineKeyboardButton("🔓 Unlock PDF", callback_data="unlock")
-        ],
-        [
-            InlineKeyboardButton("📝 Text to PDF", callback_data="texttopdf"),
-            InlineKeyboardButton("📱 QR Code Generator", callback_data="qr_code")
-        ],
-        [
-            InlineKeyboardButton("➕ More", callback_data="more")
-        ]
     ])
 
 
@@ -167,7 +130,7 @@ async def unlock_receive_file(update, context):
             await update.effective_message.reply_text(
                 "🔓 This PDF is not password-protected.\n\n"
                 "No password is required.",
-                reply_markup=unlock_main_menu_keyboard()
+                reply_markup=main_menu_button()
             )
 
             return ConversationHandler.END
@@ -288,7 +251,7 @@ async def unlock_receive_password(update, context):
             await update.effective_message.reply_text(
                 "🔓 This PDF is not password-protected.\n\n"
                 "No password is required.",
-                reply_markup=unlock_main_menu_keyboard()
+                reply_markup=main_menu_button()
             )
 
             return ConversationHandler.END
@@ -424,7 +387,7 @@ async def unlock_receive_name(update, context):
             document=final_path,
             filename=f"{safe_name}.pdf",
             caption="🔓 PDF unlocked successfully!",
-            reply_markup=unlock_result_keyboard()
+            reply_markup=main_menu_button()
         )
 
         temp_dir = context.user_data.get(
@@ -444,7 +407,7 @@ async def unlock_receive_name(update, context):
     except Exception:
         prompt = await update.effective_message.reply_text(
             "❌ Failed to send the unlocked PDF.",
-            reply_markup=unlock_result_keyboard()
+            reply_markup=main_menu_button()
         )
 
         context.user_data["unlock_prompt_message_id"] = (
@@ -472,7 +435,7 @@ async def unlock_cancel(update, context):
 
     await query.message.edit_text(
         "🏠 NovaPDF AI\n\nChoose a tool:",
-        reply_markup=unlock_main_menu_keyboard()
+        reply_markup=main_menu_button()
     )
 
     return ConversationHandler.END
