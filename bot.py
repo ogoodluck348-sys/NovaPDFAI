@@ -4851,6 +4851,10 @@ def main():
             ],
             UNLOCK_WAIT_PASSWORD: [
                 MessageHandler(
+                    filters.Regex(r"(?i)^cancel$"),
+                    unlock_cancel
+                ),
+                MessageHandler(
                     filters.TEXT & ~filters.COMMAND,
                     unlock_receive_password
                 ),
@@ -4860,6 +4864,10 @@ def main():
                 )
             ],
             UNLOCK_WAIT_NAME: [
+                MessageHandler(
+                    filters.Regex(r"(?i)^cancel$"),
+                    unlock_cancel
+                ),
                 MessageHandler(
                     filters.TEXT & ~filters.COMMAND,
                     unlock_receive_name
@@ -4903,6 +4911,10 @@ def main():
         states={
             AI_SUMMARIZER_WAIT_INPUT: [
                 MessageHandler(
+                    filters.Regex(r"(?i)^cancel$"),
+                    unlock_cancel
+                ),
+                MessageHandler(
                     filters.TEXT & ~filters.COMMAND,
                     ai_summarizer_receive
                 ),
@@ -4926,6 +4938,10 @@ def main():
                 )
             ],
             AI_SUMMARIZER_WAIT_NAME: [
+                MessageHandler(
+                    filters.Regex(r"(?i)^cancel$"),
+                    unlock_cancel
+                ),
                 MessageHandler(
                     filters.TEXT & ~filters.COMMAND,
                     ai_summarizer_receive_name
@@ -4960,6 +4976,10 @@ def main():
         ],
         states={
             QR_WAIT_TEXT: [
+                MessageHandler(
+                    filters.Regex(r"(?i)^cancel$"),
+                    unlock_cancel
+                ),
                 MessageHandler(
                     filters.TEXT & ~filters.COMMAND,
                     qr_receive_text
@@ -5042,6 +5062,10 @@ def main():
                 )
             ],
             MERGE_WAIT_NAME: [
+                MessageHandler(
+                    filters.Regex(r"(?i)^cancel$"),
+                    unlock_cancel
+                ),
                 MessageHandler(
                     filters.TEXT & ~filters.COMMAND,
                     merge_receive_name
@@ -5386,6 +5410,10 @@ def main():
             ],
 
             IMG_PDF_WAIT_NAME: [
+                MessageHandler(
+                    filters.Regex(r"(?i)^cancel$"),
+                    images_to_pdf_cancel
+                ),
                 MessageHandler(
                     filters.TEXT & ~filters.COMMAND,
                     images_to_pdf_receive_name
