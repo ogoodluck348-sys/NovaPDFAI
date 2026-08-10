@@ -17,6 +17,17 @@ def unlock_cancel_keyboard():
     ])
 
 
+def unlock_result_keyboard():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "🏠 Main Menu",
+                callback_data="main_menu"
+            )
+        ]
+    ])
+
+
 def unlock_main_menu_keyboard():
     return InlineKeyboardMarkup([
         [
@@ -413,7 +424,7 @@ async def unlock_receive_name(update, context):
             document=final_path,
             filename=f"{safe_name}.pdf",
             caption="🔓 PDF unlocked successfully!",
-            reply_markup=unlock_main_menu_keyboard()
+            reply_markup=unlock_result_keyboard()
         )
 
         temp_dir = context.user_data.get(
@@ -433,7 +444,7 @@ async def unlock_receive_name(update, context):
     except Exception:
         prompt = await update.effective_message.reply_text(
             "❌ Failed to send the unlocked PDF.",
-            reply_markup=unlock_cancel_keyboard()
+            reply_markup=unlock_result_keyboard()
         )
 
         context.user_data["unlock_prompt_message_id"] = (
