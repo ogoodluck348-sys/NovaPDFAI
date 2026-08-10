@@ -4254,9 +4254,19 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for user_id in user_ids:
         try:
+            broadcast_keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        "🏠 Main Menu",
+                        callback_data="main_menu"
+                    )
+                ]
+            ])
+
             await context.bot.send_message(
                 chat_id=int(user_id),
-                text=message
+                text=message,
+                reply_markup=broadcast_keyboard
             )
 
             sent += 1
@@ -4285,18 +4295,14 @@ async def inline_main_menu_handler(update: Update, context: ContextTypes.DEFAULT
     # Clear any active operation
     context.user_data.clear()
 
-    # Remove the Main Menu button from the result message
-    # after it has been tapped.
+    # Restore the full Main Menu in the SAME message.
     try:
-        await query.message.edit_reply_markup(reply_markup=None)
+        await query.message.edit_text(
+            "🏠 NovaPDF AI\n\nChoose a tool:",
+            reply_markup=main_keyboard()
+        )
     except Exception as e:
-        logger.warning(f"Could not remove Main Menu button: {e}")
-
-    # Send the full Main Menu as a new message.
-    await query.message.reply_text(
-        "🏠 NovaPDF AI\n\nChoose a tool:",
-        reply_markup=main_keyboard()
-    )
+        logger.warning(f"Could not restore Main Menu: {e}")
 
     return ConversationHandler.END
 
