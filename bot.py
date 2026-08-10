@@ -5347,6 +5347,12 @@ def main():
             pattern="^ai_summarizer$"
         )
     )
+    app.add_handler(
+        CallbackQueryHandler(
+            ask_pdf_start,
+            pattern="^ask_pdf$"
+        )
+    )
 
 
 
