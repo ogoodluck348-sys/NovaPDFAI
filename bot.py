@@ -2261,17 +2261,29 @@ async def ask_pdf_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=keyboard
         )
     else:
-        await message.reply_text(
+        message = await message.reply_text(
             "📚 Ask PDF\n\n"
             "Send a PDF and ask questions about it.\n\n"
             "You can send another PDF anytime to automatically switch documents.",
             reply_markup=keyboard
         )
 
+    # Remember the Ask PDF prompt so its button disappears
+    # as soon as the user sends the next message.
+    context.user_data["ask_pdf_prompt_message_id"] = message.message_id
+
     return ASK_PDF_WAIT
 
 
 async def ask_pdf_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Remove the previous Ask PDF prompt buttons when the user sends
+    # another PDF.
+    await remove_prompt_cancel_button(
+        update,
+        context,
+        "ask_pdf_prompt_message_id"
+    )
+
     document = update.effective_message.document
 
     if not document:
@@ -2343,6 +2355,14 @@ async def ask_pdf_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def ask_pdf_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Remove the previous Ask PDF prompt buttons when the user sends
+    # a question.
+    await remove_prompt_cancel_button(
+        update,
+        context,
+        "ask_pdf_prompt_message_id"
+    )
+
     document = update.effective_message.document
 
     # If the user sends another PDF while already using Ask PDF,
@@ -2499,8 +2519,11 @@ USER QUESTION:
             ].strip()
 
             if chunk:
+                is_last = start + chunk_size >= len(answer)
+
                 await update.effective_message.reply_text(
-                    chunk
+                    chunk,
+                    reply_markup=main_menu_button() if is_last else None
                 )
 
         return ASK_PDF_WAIT
