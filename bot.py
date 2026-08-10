@@ -5065,6 +5065,10 @@ def main():
                 CallbackQueryHandler(
                     ask_pdf_cancel,
                     pattern="^ask_pdf_cancel$"
+                ),
+                CallbackQueryHandler(
+                    inline_main_menu_handler,
+                    pattern="^main_menu$"
                 )
             ]
         },
