@@ -2004,9 +2004,9 @@ async def ai_summarizer_start(update, context):
         await query.answer()
         message = query.message
         await message.edit_text(
-            "🧠 <b>AI Summarizer</b>\n\n"
+            "🧠 <b>AI Explainer</b>\n\n"
             "Send me any topic, text, notes, or information "
-            "you want Nova AI to summarize.\n\n"
+            "you want Nova AI to explain.\n\n"
             "Example:\n"
             "<i>Photosynthesis and its stages</i>",
             parse_mode="HTML",
@@ -2014,9 +2014,9 @@ async def ai_summarizer_start(update, context):
         )
     else:
         message = await update.effective_message.reply_text(
-            "🧠 <b>AI Summarizer</b>\n\n"
+            "🧠 <b>AI Explainer</b>\n\n"
             "Send me any topic, text, notes, or information "
-            "you want Nova AI to summarize.\n\n"
+            "you want Nova AI to explain.\n\n"
             "Example:\n"
             "<i>Photosynthesis and its stages</i>",
             parse_mode="HTML",
@@ -2054,7 +2054,7 @@ async def ai_summarizer_receive(update, context):
     context.user_data["ai_summarizer_input"] = text.strip()
 
     await update.effective_message.reply_text(
-        "⏳ <b>Nova AI is summarizing...</b>\n\n"
+        "⏳ <b>Nova AI is preparing your explanation...</b>\n\n"
         "🤖 Please wait.",
         parse_mode="HTML"
     )
@@ -2065,7 +2065,7 @@ async def ai_summarizer_receive(update, context):
         context.user_data.clear()
 
         await update.effective_message.reply_text(
-            "❌ Nova AI couldn't generate a summary right now.",
+            "❌ Nova AI couldn't generate an explanation right now.",
             reply_markup=main_menu_button()
         )
 
@@ -2077,7 +2077,7 @@ async def ai_summarizer_receive(update, context):
     context.user_data["ai_summarizer_summary"] = summary
 
     await update.effective_message.reply_text(
-        "✅ <b>Summary generated!</b>\n\n"
+        "✅ <b>Explanation generated!</b>\n\n"
         "How would you like to receive it?",
         parse_mode="HTML",
         reply_markup=ai_summarizer_output_keyboard()
@@ -2101,7 +2101,7 @@ async def ai_summarizer_send_text(update, context):
 
         return ConversationHandler.END
 
-    await query.message.edit_text("📝 <b>Nova AI Summary</b>", parse_mode="HTML")
+    await query.message.edit_text("🧠 <b>Nova AI Explanation</b>", parse_mode="HTML")
 
     chunk_size = 3500
 
@@ -2194,7 +2194,7 @@ async def ai_summarizer_receive_name(update, context):
 
     try:
         await update.effective_message.reply_text(
-            "⏳ Creating your summary PDF..."
+            "⏳ Creating your explanation PDF..."
         )
 
         pdf = canvas.Canvas(output_path)
@@ -2208,7 +2208,7 @@ async def ai_summarizer_receive_name(update, context):
         y = height - top_margin
 
         pdf.setFont("Helvetica-Bold", 16)
-        pdf.drawString(left_margin, y, "NovaPDF AI — Summary")
+        pdf.drawString(left_margin, y, "NovaPDF AI — Explanation")
         y -= 30
 
         pdf.setFont("Helvetica", 10)
@@ -2257,7 +2257,7 @@ async def ai_summarizer_receive_name(update, context):
             await update.effective_message.reply_document(
                 document=pdf_file,
                 filename=name,
-                caption="📄 Your Nova AI summary.",
+                caption="📄 Your Nova AI explanation.",
                 reply_markup=main_menu_button()
             )
 
@@ -2309,12 +2309,12 @@ async def summarize_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query:
         await message.edit_text(
-            "📝 Send the PDF you want Nova AI to summarize.",
+            "📝 Send the PDF you want Nova AI to explain.",
             reply_markup=keyboard
         )
     else:
         sent = await message.reply_text(
-            "📝 Send the PDF you want Nova AI to summarize.",
+            "📝 Send the PDF you want Nova AI to explain.",
             reply_markup=keyboard
         )
         message = sent
