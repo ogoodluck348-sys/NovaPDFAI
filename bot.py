@@ -2101,12 +2101,16 @@ async def ai_summarizer_receive_name(update, context):
 
         def add_page_number(canvas_obj, doc_obj):
             canvas_obj.saveState()
-            canvas_obj.setFont("DejaVuSans", 8)
+
+            page_font = "DejaVuSans" if DEJAVU_FONT else "Helvetica"
+
+            canvas_obj.setFont(page_font, 8)
             canvas_obj.drawCentredString(
                 A4[0] / 2,
                 25,
                 f"NovaPDF AI  •  Page {doc_obj.page}"
             )
+
             canvas_obj.restoreState()
 
         doc.build(
