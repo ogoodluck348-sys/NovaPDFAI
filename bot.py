@@ -5402,9 +5402,13 @@ def main():
                 inline_back_handler,
                 pattern="^back$"
             ),
+            MessageHandler(
+                filters.Regex(r"(?i)^cancel$"),
+                images_to_pdf_cancel
+            ),
             CommandHandler(
                 "cancel",
-                cancel
+                images_to_pdf_cancel
             )
         ]
     )
