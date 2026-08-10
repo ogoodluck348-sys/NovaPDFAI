@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+from navigation import main_keyboard
 from telegram.ext import ConversationHandler
 
 UNLOCK_WAIT_FILE = 23
@@ -435,7 +436,7 @@ async def unlock_cancel(update, context):
 
     await query.message.edit_text(
         "🏠 NovaPDF AI\n\nChoose a tool:",
-        reply_markup=main_menu_button()
+        reply_markup=main_keyboard()
     )
 
     return ConversationHandler.END

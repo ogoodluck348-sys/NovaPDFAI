@@ -3,6 +3,7 @@ import tempfile
 import shutil
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from navigation import main_keyboard
 from telegram.ext import ContextTypes, ConversationHandler
 from PIL import Image
 
@@ -263,9 +264,7 @@ async def images_to_pdf_cancel(update, context):
 
     await query.message.edit_text(
         "🏠 NovaPDF AI\n\nChoose a tool:",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🏠 Main Menu", callback_data="main_menu")]
-        ])
+        reply_markup=main_keyboard()
     )
 
     return ConversationHandler.END

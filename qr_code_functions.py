@@ -11,6 +11,7 @@ from qrcode.image.styles.moduledrawers import (
 )
 
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+from navigation import main_keyboard
 from telegram.ext import ConversationHandler
 
 
@@ -398,7 +399,7 @@ async def qr_cancel(update, context):
 
     await query.message.edit_text(
         "🏠 NovaPDF AI\\n\\nChoose a tool:",
-        reply_markup=main_menu_button()
+        reply_markup=main_keyboard()
     )
 
     return ConversationHandler.END
