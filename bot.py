@@ -36,7 +36,7 @@ from reportlab.lib.colors import Color
 TOKEN = os.getenv("BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-ADMIN_ID = 8131832776
+ADMIN_ID = 8720336056
 
 if not TOKEN:
     raise ValueError("BOT_TOKEN is not set.")
